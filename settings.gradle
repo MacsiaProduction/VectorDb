@@ -1,0 +1,5 @@
+rootProject.name = 'vector-db'
+
+include 'common'
+include 'main-module'
+include 'storage-module'

@@ -1,0 +1,58 @@
+plugins {
+    id 'java-library'
+    id 'org.springframework.boot' version '3.3.4' apply false
+    id 'io.spring.dependency-management' version '1.1.6' apply false
+}
+
+allprojects {
+    group = 'com.vectordb'
+    version = '1.0.0'
+
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io' } // For hnswlib
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(23)
+        }
+        sourceCompatibility = JavaVersion.VERSION_23
+        targetCompatibility = JavaVersion.VERSION_23
+    }
+
+    // Common dependencies for all modules
+    dependencies {
+        // Lombok for reducing boilerplate code
+        compileOnly 'org.projectlombok:lombok:1.18.30'
+        annotationProcessor 'org.projectlombok:lombok:1.18.30'
+        
+        // Test dependencies
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+        testCompileOnly 'org.projectlombok:lombok:1.18.30'
+        testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+// Configure Spring Boot only for application modules (not common)
+configure(subprojects.findAll { it.name != 'common' }) {
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter'
+        implementation 'org.springframework.boot:spring-boot-starter-validation'
+        implementation 'org.springframework.boot:spring-boot-starter-actuator'
+        implementation 'com.fasterxml.jackson.core:jackson-databind'
+        
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    }
+}

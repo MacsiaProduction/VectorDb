@@ -27,3 +27,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+/main-module/build/
+/common/build/
+/storage-module/build/
+/build/
+.gradle/
+.idea/

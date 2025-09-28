@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: vector-db-main
+  webflux:
+    base-path: /
+
+vector-db:
+  storage:
+    host: localhost
+    port: 8081
+    connection-timeout: 5000
+    read-timeout: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.vectordb: INFO
+    org.springframework.web: DEBUG

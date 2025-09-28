@@ -1,0 +1,33 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: vector-db-storage
+
+vector-db:
+  storage:
+    data-path: ./data/storage
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.vectordb: INFO
+    org.rocksdb: WARN
+
+# HNSW Vector Index Configuration
+vector:
+  index:
+    maxElements: 10000
+    m: 16
+    efConstruction: 200
+    efSearch: 100
+    spaceType: cosine

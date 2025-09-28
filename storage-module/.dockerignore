@@ -1,0 +1,59 @@
+# Source files (we only need the built JAR)
+src/
+*.java
+*.kt
+*.scala
+
+# Build files (except the final JAR)
+build/
+!build/libs/*.jar
+target/
+*.class
+*.jar
+!build/libs/vector-db-storage-*.jar
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Gradle wrapper (not needed in container)
+gradle/
+gradlew
+gradlew.bat
+
+# Documentation
+README.md
+*.md
+
+# Test files
+**/test/
+**/*Test.java
+**/*Tests.java
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Data directories (should be mounted as volumes)
+data/
