@@ -1,56 +1,97 @@
 package com.vectordb.main.controller;
 
-import com.vectordb.common.model.VectorEntry;
-import com.vectordb.common.model.SearchQuery;
-import com.vectordb.common.model.SearchResult;
-import com.vectordb.common.service.VectorStorageService;
-import jakarta.validation.Valid;
+import com.vectordb.main.dto.AddVectorRequest;
+import com.vectordb.main.dto.DeleteVectorRequest;
+import com.vectordb.main.dto.GetTopKRequest;
+import com.vectordb.main.model.VectorEntry;
+import com.vectordb.main.service.VectorService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
+import java.util.List;
+
+@Slf4j
 @RestController
-@RequestMapping("/api/v1/vectors")
+@RequestMapping("/api/vectors")
 @RequiredArgsConstructor
+@Tag(name = "Vector Operations", description = "Operations for managing vectors in the vector database")
 public class VectorController {
     
-    private final VectorStorageService vectorService;
+    private final VectorService vectorService;
     
-    @PostMapping("/{databaseId}")
-    public Mono<ResponseEntity<String>> addVector(
-            @PathVariable String databaseId,
-            @Valid @RequestBody VectorEntry entry) {
-        return Mono.fromSupplier(() -> vectorService.add(entry, databaseId))
-                   .map(id -> ResponseEntity.status(HttpStatus.CREATED).body(id))
-                   .onErrorReturn(ResponseEntity.badRequest().build());
+    @PostMapping("/topK")
+    @Operation(summary = "Get top K similar vectors", 
+               description = "Find the K most similar vectors to the given query vector")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved top K vectors"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+        @ApiResponse(responseCode = "404", description = "Database not found")
+    })
+    public ResponseEntity<List<VectorEntry>> getTopK(@RequestBody GetTopKRequest request) {
+        try {
+            log.info("Received getTopK request: vector length={}, k={}, dbId={}", 
+                    request.getVector() != null ? request.getVector().length : 0, 
+                    request.getK(), 
+                    request.getDbId());
+            
+            List<VectorEntry> result = vectorService.getTopK(
+                request.getVector(), 
+                request.getK(), 
+                request.getDbId()
+            );
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error in getTopK: ", e);
+            return ResponseEntity.badRequest().build();
+        }
     }
     
-    @GetMapping("/{databaseId}/{id}")
-    public Mono<ResponseEntity<VectorEntry>> getVector(
-            @PathVariable String databaseId,
-            @PathVariable String id) {
-        return Mono.fromSupplier(() -> vectorService.get(id, databaseId))
-                   .map(entry -> entry.map(ResponseEntity::ok)
-                                     .orElse(ResponseEntity.notFound().build()));
+    @PostMapping("/add")
+    @Operation(summary = "Add a vector", 
+               description = "Add a new vector entry to the specified database")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Vector successfully added"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+        @ApiResponse(responseCode = "404", description = "Database not found")
+    })
+    public ResponseEntity<String> add(@RequestBody AddVectorRequest request) {
+        try {
+            log.info("Received add request: vector length={}, data={}, dbId={}", 
+                    request.getVector() != null ? request.getVector().length : 0,
+                    request.getData(),
+                    request.getDbId());
+            
+            String result = vectorService.add(request.getVector(), request.getData(), request.getDbId());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error in add: ", e);
+            return ResponseEntity.badRequest().build();
+        }
     }
     
-    @DeleteMapping("/{databaseId}/{id}")
-    public Mono<ResponseEntity<Void>> deleteVector(
-            @PathVariable String databaseId,
-            @PathVariable String id) {
-        return Mono.fromSupplier(() -> vectorService.delete(id, databaseId))
-                   .map(deleted -> deleted ? ResponseEntity.noContent().build()
-                                           : ResponseEntity.notFound().build());
-    }
-    
-    @PostMapping("/{databaseId}/search")
-    public Flux<SearchResult> searchVectors(
-            @PathVariable String databaseId,
-            @Valid @RequestBody SearchQuery query) {
-        SearchQuery queryWithDb = new SearchQuery(query.embedding(), query.k(), databaseId, query.threshold());
-        return Flux.fromIterable(vectorService.search(queryWithDb));
+    @DeleteMapping("/delete")
+    @Operation(summary = "Delete a vector", 
+               description = "Delete a vector entry from the specified database")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Vector successfully deleted"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+        @ApiResponse(responseCode = "404", description = "Vector or database not found")
+    })
+    public ResponseEntity<Boolean> delete(@RequestBody DeleteVectorRequest request) {
+        try {
+            log.info("Received delete request: id={}, dbId={}", request.getId(), request.getDbId());
+            
+            boolean result = vectorService.delete(request.getId(), request.getDbId());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error in delete: ", e);
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
