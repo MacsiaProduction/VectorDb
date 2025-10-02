@@ -7,8 +7,13 @@ Vector Database - это высокопроизводительная векто
 ## Готово
 - Базовая реализация системы
   
-## Схематическое изображение текущей реализации
-<img width="781" height="761" alt="vectordb" src="https://github.com/user-attachments/assets/61d9f1b1-5b53-49d5-860d-019494fbb364" />
+## Схематическое изображение системы
+Верхнеуровневая архитектура
+![БД](https://github.com/user-attachments/assets/433cef80-a742-4ad2-948e-bf4968bb75c3)
+
+Детализация
+<img width="732" height="740" alt="vectordb" src="https://github.com/user-attachments/assets/484d4c11-7d39-4414-b314-fcfcb745ffbd" />
+
 
 
 ## В работе / Осталось реализовать
