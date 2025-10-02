@@ -4,7 +4,7 @@ import com.vectordb.common.model.VectorEntry;
 import com.vectordb.common.model.SearchQuery;
 import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.DatabaseInfo;
-import com.vectordb.common.service.VectorStorageService;
+import com.vectordb.storage.service.VectorStorageService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;

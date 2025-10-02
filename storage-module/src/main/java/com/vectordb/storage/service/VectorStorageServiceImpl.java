@@ -4,7 +4,6 @@ import com.vectordb.common.model.VectorEntry;
 import com.vectordb.common.model.SearchQuery;
 import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.DatabaseInfo;
-import com.vectordb.common.service.VectorStorageService;
 import com.vectordb.storage.kv.RocksDbStorage;
 import com.vectordb.storage.index.VectorIndex;
 import lombok.RequiredArgsConstructor;

@@ -1,4 +1,4 @@
-package com.vectordb.common.service;
+package com.vectordb.storage.service;
 
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.common.model.SearchQuery;
