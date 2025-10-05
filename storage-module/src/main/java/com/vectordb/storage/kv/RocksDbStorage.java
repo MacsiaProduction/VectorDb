@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @Slf4j
-public class RocksDbStorage {
+public class RocksDbStorage implements KeyValueStorage {
     private static final String VECTOR_CF = "vectors";
     private static final String DB_INFO_CF = "db_info";
     
@@ -62,12 +62,14 @@ public class RocksDbStorage {
         }
     }
     
+    @Override
     public void putVector(String databaseId, VectorEntry entry) throws Exception {
         String key = databaseId + ":" + entry.id();
         byte[] value = objectMapper.writeValueAsBytes(entry);
         rocksDB.put(columnFamilyHandles.get(VECTOR_CF), key.getBytes(), value);
     }
     
+    @Override
     public Optional<VectorEntry> getVector(String databaseId, String id) throws Exception {
         String key = databaseId + ":" + id;
         byte[] value = rocksDB.get(columnFamilyHandles.get(VECTOR_CF), key.getBytes());
@@ -80,6 +82,7 @@ public class RocksDbStorage {
         return Optional.of(entry);
     }
     
+    @Override
     public boolean deleteVector(String databaseId, String id) throws Exception {
         String key = databaseId + ":" + id;
         byte[] existing = rocksDB.get(columnFamilyHandles.get(VECTOR_CF), key.getBytes());
@@ -92,6 +95,7 @@ public class RocksDbStorage {
         return true;
     }
     
+    @Override
     public List<VectorEntry> getAllVectors(String databaseId) throws Exception {
         List<VectorEntry> vectors = new ArrayList<>();
         String prefix = databaseId + ":";
@@ -112,11 +116,13 @@ public class RocksDbStorage {
         return vectors;
     }
     
+    @Override
     public void putDatabaseInfo(DatabaseInfo dbInfo) throws Exception {
         byte[] value = objectMapper.writeValueAsBytes(dbInfo);
         rocksDB.put(columnFamilyHandles.get(DB_INFO_CF), dbInfo.id().getBytes(), value);
     }
     
+    @Override
     public Optional<DatabaseInfo> getDatabaseInfo(String databaseId) throws Exception {
         byte[] value = rocksDB.get(columnFamilyHandles.get(DB_INFO_CF), databaseId.getBytes());
         
@@ -128,6 +134,7 @@ public class RocksDbStorage {
         return Optional.of(dbInfo);
     }
     
+    @Override
     public boolean deleteDatabaseInfo(String databaseId) throws Exception {
         byte[] existing = rocksDB.get(columnFamilyHandles.get(DB_INFO_CF), databaseId.getBytes());
         
@@ -139,6 +146,7 @@ public class RocksDbStorage {
         return true;
     }
     
+    @Override
     public List<DatabaseInfo> getAllDatabases() throws Exception {
         List<DatabaseInfo> databases = new ArrayList<>();
         
