@@ -6,61 +6,76 @@ import com.vectordb.common.model.SearchResult;
 import java.util.List;
 
 /**
- * Interface for vector indexing operations.
- * This abstraction allows for different indexing implementations (HNSW, IVF, LSH, etc.)
- * while maintaining a consistent API for the storage service.
+ * Интерфейс для операций с векторным индексом.
+ * Позволяет использовать разные реализации (HNSW, IVF, LSH и т.д.)
+ * с единым API для сервиса хранения.
  */
 public interface VectorIndex {
     
     /**
-     * Build the index with existing vectors
+     * Построить индекс для БД
+     * @param databaseId ID базы данных
      */
-    void build();
+    void build(String databaseId);
     
     /**
-     * Add a vector to the index
+     * Добавить вектор в индекс
+     * @param vector вектор для добавления
+     * @param databaseId ID базы данных
      */
-    void add(VectorEntry vector);
+    void add(VectorEntry vector, String databaseId);
     
     /**
-     * Remove a vector from the index
-     * @param vectorId ID of the vector to remove
-     * @return true if vector was found and removed, false otherwise
+     * Удалить вектор из индекса
+     * @param vectorId ID вектора
+     * @param databaseId ID базы данных
+     * @return true если вектор найден и удалён
      */
-    boolean remove(String vectorId);
+    boolean remove(String vectorId, String databaseId);
     
     /**
-     * Search for k nearest neighbors
-     * @param queryVector the query vector
-     * @param k number of neighbors to return
-     * @return list of search results sorted by distance (ascending)
+     * Поиск k ближайших соседей
+     * @param queryVector вектор запроса
+     * @param k количество соседей
+     * @param databaseId ID базы данных
+     * @return список результатов, отсортированных по расстоянию
      */
-    List<SearchResult> search(double[] queryVector, int k);
+    List<SearchResult> search(double[] queryVector, int k, String databaseId);
     
     /**
-     * Save the index to a file
-     * @param filePath path to save the index
+     * Сохранить индекс в файл
+     * @param filePath путь к файлу
+     * @param databaseId ID базы данных
      */
-    void save(String filePath);
+    void save(String filePath, String databaseId);
     
     /**
-     * Load the index from a file
-     * @param filePath path to load the index from
+     * Загрузить индекс из файла
+     * @param filePath путь к файлу
+     * @param databaseId ID базы данных
      */
-    void load(String filePath);
+    void load(String filePath, String databaseId);
     
     /**
-     * Get the number of vectors in the index
+     * Получить количество векторов в индексе
+     * @param databaseId ID базы данных
      */
-    int size();
+    int size(String databaseId);
     
     /**
-     * Clear the index
+     * Очистить индекс для БД
+     * @param databaseId ID базы данных
      */
-    void clear();
+    void clear(String databaseId);
     
     /**
-     * Check if the index is built
+     * Очистить все индексы всех БД
      */
-    boolean isBuilt();
+    void clearAll();
+    
+    /**
+     * Проверить, построен ли индекс
+     * @param databaseId ID базы данных
+     */
+    boolean isBuilt(String databaseId);
 }

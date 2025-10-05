@@ -8,59 +8,36 @@ import com.vectordb.common.model.DatabaseInfo;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Core interface for vector storage operations.
- * This interface will be implemented by the storage service.
- */
+/** Интерфейс для операций с векторным хранилищем */
 public interface VectorStorageService {
     
-    /**
-     * Add a vector entry to the storage
-     */
+    /** Добавить вектор в хранилище */
     String add(VectorEntry entry, String databaseId);
     
-    /**
-     * Get vector entry by ID
-     */
+    /** Получить вектор по ID */
     Optional<VectorEntry> get(String id, String databaseId);
     
-    /**
-     * Delete vector entry by ID
-     */
+    /** Удалить вектор по ID */
     boolean delete(String id, String databaseId);
     
-    /**
-     * Search for similar vectors using KNN
-     */
+    /** Поиск похожих векторов (KNN) */
     List<SearchResult> search(SearchQuery query);
     
-    /**
-     * Create a new database
-     */
+    /** Создать новую базу данных */
     DatabaseInfo createDatabase(String databaseId, String name);
     
-    /**
-     * Drop a database
-     */
+    /** Удалить базу данных */
     boolean dropDatabase(String databaseId);
     
-    /**
-     * Get database information
-     */
+    /** Получить информацию о базе данных */
     Optional<DatabaseInfo> getDatabaseInfo(String databaseId);
     
-    /**
-     * List all databases
-     */
+    /** Список всех баз данных */
     List<DatabaseInfo> listDatabases();
     
-    /**
-     * Rebuild index for the database (for future index implementation)
-     */
+    /** Перестроить индекс для базы данных */
     boolean rebuildIndex(String databaseId);
     
-    /**
-     * Get health status of the storage
-     */
+    /** Проверить здоровье хранилища */
     boolean isHealthy();
 }

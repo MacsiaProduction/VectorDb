@@ -7,9 +7,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class VectorSimilarity {
     
-    /**
-     * Calculate Euclidean distance between two vectors
-     */
+    /** Вычислить евклидово расстояние между векторами */
     public double euclideanDistance(double[] vector1, double[] vector2) {
         if (vector1.length != vector2.length) {
             throw new IllegalArgumentException("Vectors must have the same dimension");
@@ -23,9 +21,7 @@ public class VectorSimilarity {
         return Math.sqrt(sum);
     }
     
-    /**
-     * Calculate cosine similarity between two vectors
-     */
+    /** Вычислить косинусное сходство между векторами */
     public double cosineSimilarity(double[] vector1, double[] vector2) {
         if (vector1.length != vector2.length) {
             throw new IllegalArgumentException("Vectors must have the same dimension");
@@ -48,9 +44,7 @@ public class VectorSimilarity {
         return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
     }
     
-    /**
-     * Calculate Manhattan (L1) distance between two vectors
-     */
+    /** Вычислить манхэттенское (L1) расстояние между векторами */
     public double manhattanDistance(double[] vector1, double[] vector2) {
         if (vector1.length != vector2.length) {
             throw new IllegalArgumentException("Vectors must have the same dimension");

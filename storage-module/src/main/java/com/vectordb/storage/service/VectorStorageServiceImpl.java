@@ -37,8 +37,8 @@ public class VectorStorageServiceImpl implements VectorStorageService {
             
             storage.putVector(databaseId, entryWithId);
             
-            // Add to vector index
-            vectorIndex.add(entryWithId);
+            // Add to vector index for this database
+            vectorIndex.add(entryWithId, databaseId);
             
             // Update vector count
             DatabaseInfo updatedInfo = dbInfo.get().withVectorCount(dbInfo.get().vectorCount() + 1);
@@ -76,9 +76,9 @@ public class VectorStorageServiceImpl implements VectorStorageService {
             boolean deleted = storage.deleteVector(databaseId, id);
             
             if (deleted) {
-                // Remove from vector index
-                boolean removedFromIndex = vectorIndex.remove(id);
-                log.debug("Removed vector {} from index: {}", id, removedFromIndex);
+                // Remove from vector index for this database
+                boolean removedFromIndex = vectorIndex.remove(id, databaseId);
+                log.debug("Removed vector {} from index for database {}: {}", id, databaseId, removedFromIndex);
                 
                 // Update vector count
                 Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
@@ -111,8 +111,8 @@ public class VectorStorageServiceImpl implements VectorStorageService {
                 throw new IllegalArgumentException("Database not found: " + databaseId);
             }
             
-            // Use vector index for search
-            return vectorIndex.search(query.embedding(), query.k());
+            // Use vector index for search in this database
+            return vectorIndex.search(query.embedding(), query.k(), databaseId);
             
         } catch (Exception e) {
             log.error("Failed to search in database {}", query.databaseId(), e);
@@ -151,8 +151,8 @@ public class VectorStorageServiceImpl implements VectorStorageService {
                 for (VectorEntry vector : vectors) {
                     // Remove from storage
                     storage.deleteVector(databaseId, vector.id());
-                    // Remove from vector index
-                    vectorIndex.remove(vector.id());
+                    // Remove from vector index for this database
+                    vectorIndex.remove(vector.id(), databaseId);
                 }
                 
                 log.info("Dropped database: {} with {} vectors", databaseId, vectors.size());
@@ -195,17 +195,17 @@ public class VectorStorageServiceImpl implements VectorStorageService {
                 throw new IllegalArgumentException("Database not found: " + databaseId);
             }
             
-            // Rebuild the vector index
-            vectorIndex.clear();
+            // Rebuild the vector index for this database
+            vectorIndex.clear(databaseId);
             
             // Get all vectors and add them to the index
             List<VectorEntry> vectors = storage.getAllVectors(databaseId);
             for (VectorEntry vector : vectors) {
-                vectorIndex.add(vector);
+                vectorIndex.add(vector, databaseId);
             }
             
-            // Build the index
-            vectorIndex.build();
+            // Build the index for this database
+            vectorIndex.build(databaseId);
             
             log.info("Rebuilt index for database: {}", databaseId);
             return true;

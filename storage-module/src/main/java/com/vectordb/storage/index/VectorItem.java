@@ -5,9 +5,7 @@ import com.vectordb.common.model.VectorEntry;
 import lombok.Getter;
 
 
-/**
- * Wrapper class to make VectorEntry compatible with hnswlib Item interface
- */
+/** Обёртка для совместимости VectorEntry с hnswlib Item */
 public class VectorItem implements Item<String, float[]> {
     private final String id;
     private final float[] vector;
@@ -21,7 +19,7 @@ public class VectorItem implements Item<String, float[]> {
     }
 
     public static VectorItem fromVectorEntry(VectorEntry entry) {
-        // Convert double[] to float[] for hnswlib compatibility
+        // Конвертация double[] в float[] для hnswlib
         float[] floatVector = new float[entry.embedding().length];
         for (int i = 0; i < entry.embedding().length; i++) {
             floatVector[i] = (float) entry.embedding()[i];
