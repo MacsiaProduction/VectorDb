@@ -28,19 +28,14 @@ public class DatabaseController {
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Database successfully created"),
         @ApiResponse(responseCode = "400", description = "Invalid database ID"),
-        @ApiResponse(responseCode = "409", description = "Database already exists")
+        @ApiResponse(responseCode = "500", description = "Internal server error during database creation")
     })
     public ResponseEntity<Boolean> createDb(
             @Parameter(description = "Database ID to create", required = true)
             @PathVariable String dbId) {
-        try {
-            log.info("Received createDb request: dbId={}", dbId);
-            boolean result = vectorService.createDb(dbId);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Error in createDb: ", e);
-            return ResponseEntity.badRequest().build();
-        }
+        log.info("Received createDb request: dbId={}", dbId);
+        boolean result = vectorService.createDb(dbId);
+        return ResponseEntity.ok(result);
     }
     
     @DeleteMapping("/{dbId}")
@@ -48,37 +43,28 @@ public class DatabaseController {
                description = "Delete the database with the specified ID")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Database successfully dropped"),
-        @ApiResponse(responseCode = "400", description = "Invalid database ID"),
-        @ApiResponse(responseCode = "404", description = "Database not found")
+        @ApiResponse(responseCode = "400", description = "Invalid database ID or database does not exist"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during database deletion")
     })
     public ResponseEntity<Boolean> dropDb(
             @Parameter(description = "Database ID to drop", required = true)
             @PathVariable String dbId) {
-        try {
-            log.info("Received dropDb request: dbId={}", dbId);
-            boolean result = vectorService.dropDb(dbId);
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Error in dropDb: ", e);
-            return ResponseEntity.badRequest().build();
-        }
+        log.info("Received dropDb request: dbId={}", dbId);
+        boolean result = vectorService.dropDb(dbId);
+        return ResponseEntity.ok(result);
     }
     
     @GetMapping
     @Operation(summary = "List all databases", 
                description = "Get a list of all available database IDs")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved database list")
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved database list"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during database listing")
     })
     public ResponseEntity<List<String>> showDBs() {
-        try {
-            log.info("Received showDBs request");
-            List<String> result = vectorService.showDBs();
-            log.info("Returning {} databases", result.size());
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Error in showDBs: ", e);
-            return ResponseEntity.badRequest().build();
-        }
+        log.info("Received showDBs request");
+        List<String> result = vectorService.showDBs();
+        log.info("Returning {} databases", result.size());
+        return ResponseEntity.ok(result);
     }
 }

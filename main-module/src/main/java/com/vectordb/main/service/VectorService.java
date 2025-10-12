@@ -1,6 +1,7 @@
 package com.vectordb.main.service;
 
 import com.vectordb.common.model.VectorEntry;
+import com.vectordb.main.exception.VectorRepositoryException;
 import com.vectordb.main.repository.VectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,14 +27,8 @@ public class VectorService {
      * @param dbId database identifier
      * @return list of similar vectors
      */
-    public List<VectorEntry> getTopK(double[] vector, int k, String dbId) {
+    public List<VectorEntry> getTopK(double[] vector, int k, String dbId) throws VectorRepositoryException {
         log.debug("Searching for top {} similar vectors in database {}", k, dbId);
-        
-        if (!vectorRepository.databaseExists(dbId)) {
-            log.warn("Database {} does not exist", dbId);
-            return List.of();
-        }
-        
         return vectorRepository.getTopKSimilar(vector, k, dbId);
     }
     
@@ -44,13 +39,8 @@ public class VectorService {
      * @param dbId database identifier
      * @return generated ID for the added vector
      */
-    public String add(double[] vector, String data, String dbId) {
+    public String add(double[] vector, String data, String dbId) throws VectorRepositoryException {
         log.debug("Adding vector to database {} with data: {}", dbId, data);
-        
-        if (!vectorRepository.databaseExists(dbId)) {
-            log.warn("Database {} does not exist", dbId);
-            throw new IllegalArgumentException("Database " + dbId + " does not exist");
-        }
         
         VectorEntry vectorEntry = new VectorEntry(null, vector, data, null);
         String id = vectorRepository.add(vectorEntry, dbId);
@@ -65,14 +55,8 @@ public class VectorService {
      * @param dbId database identifier
      * @return true if vector was deleted, false otherwise
      */
-    public boolean delete(String id, String dbId) {
+    public boolean delete(String id, String dbId) throws VectorRepositoryException {
         log.debug("Deleting vector {} from database {}", id, dbId);
-        
-        if (!vectorRepository.databaseExists(dbId)) {
-            log.warn("Database {} does not exist", dbId);
-            return false;
-        }
-        
         return vectorRepository.deleteById(id, dbId);
     }
     
@@ -81,17 +65,9 @@ public class VectorService {
      * @param dbId database identifier
      * @return true if database was created successfully
      */
-    public boolean createDb(String dbId) {
+    public boolean createDb(String dbId) throws VectorRepositoryException {
         log.debug("Creating database {}", dbId);
-        
-        if (vectorRepository.databaseExists(dbId)) {
-            log.warn("Database {} already exists", dbId);
-            return false;
-        }
-        
-        boolean created = vectorRepository.createDatabase(dbId);
-        log.debug("Database {} creation result: {}", dbId, created);
-        return created;
+        return vectorRepository.createDatabase(dbId);
     }
     
     /**
@@ -99,24 +75,16 @@ public class VectorService {
      * @param dbId database identifier
      * @return true if database was dropped successfully
      */
-    public boolean dropDb(String dbId) {
+    public boolean dropDb(String dbId) throws VectorRepositoryException {
         log.debug("Dropping database {}", dbId);
-        
-        if (!vectorRepository.databaseExists(dbId)) {
-            log.warn("Database {} does not exist", dbId);
-            return false;
-        }
-        
-        boolean dropped = vectorRepository.dropDatabase(dbId);
-        log.debug("Database {} drop result: {}", dbId, dropped);
-        return dropped;
+        return vectorRepository.dropDatabase(dbId);
     }
     
     /**
      * Get list of all available databases
      * @return list of database IDs
      */
-    public List<String> showDBs() {
+    public List<String> showDBs() throws VectorRepositoryException {
         log.debug("Listing all databases");
         
         List<String> dbIds = vectorRepository.getAllDatabaseIds();

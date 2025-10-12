@@ -30,26 +30,21 @@ public class VectorController {
                description = "Find the K most similar vectors to the given query vector")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Successfully retrieved top K vectors"),
-        @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
-        @ApiResponse(responseCode = "404", description = "Database not found")
+        @ApiResponse(responseCode = "404", description = "Database not found"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during vector search")
     })
     public ResponseEntity<List<VectorEntry>> getTopK(@RequestBody GetTopKRequest request) {
-        try {
-            log.info("Received getTopK request: vector length={}, k={}, dbId={}", 
-                    request.getVector() != null ? request.getVector().length : 0, 
-                    request.getK(), 
-                    request.getDbId());
-            
-            List<VectorEntry> result = vectorService.getTopK(
-                request.getVector(), 
+        log.info("Received getTopK request: vector length={}, k={}, dbId={}", 
+                request.getVector() != null ? request.getVector().length : 0, 
                 request.getK(), 
-                request.getDbId()
-            );
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Error in getTopK: ", e);
-            return ResponseEntity.badRequest().build();
-        }
+                request.getDbId());
+        
+        List<VectorEntry> result = vectorService.getTopK(
+            request.getVector(), 
+            request.getK(), 
+            request.getDbId()
+        );
+        return ResponseEntity.ok(result);
     }
     
     @PostMapping("/add")
@@ -57,22 +52,17 @@ public class VectorController {
                description = "Add a new vector entry to the specified database")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Vector successfully added"),
-        @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
-        @ApiResponse(responseCode = "404", description = "Database not found")
+        @ApiResponse(responseCode = "404", description = "Database not found"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during vector addition")
     })
     public ResponseEntity<String> add(@RequestBody AddVectorRequest request) {
-        try {
-            log.info("Received add request: vector length={}, data={}, dbId={}", 
-                    request.getVector() != null ? request.getVector().length : 0,
-                    request.getData(),
-                    request.getDbId());
-            
-            String result = vectorService.add(request.getVector(), request.getData(), request.getDbId());
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Error in add: ", e);
-            return ResponseEntity.badRequest().build();
-        }
+        log.info("Received add request: vector length={}, data={}, dbId={}", 
+                request.getVector() != null ? request.getVector().length : 0,
+                request.getData(),
+                request.getDbId());
+        
+        String result = vectorService.add(request.getVector(), request.getData(), request.getDbId());
+        return ResponseEntity.ok(result);
     }
     
     @DeleteMapping("/delete")
@@ -80,18 +70,13 @@ public class VectorController {
                description = "Delete a vector entry from the specified database")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Vector successfully deleted"),
-        @ApiResponse(responseCode = "400", description = "Invalid request parameters"),
-        @ApiResponse(responseCode = "404", description = "Vector or database not found")
+        @ApiResponse(responseCode = "404", description = "Database not found"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during vector deletion")
     })
     public ResponseEntity<Boolean> delete(@RequestBody DeleteVectorRequest request) {
-        try {
-            log.info("Received delete request: id={}, dbId={}", request.getId(), request.getDbId());
-            
-            boolean result = vectorService.delete(request.getId(), request.getDbId());
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            log.error("Error in delete: ", e);
-            return ResponseEntity.badRequest().build();
-        }
+        log.info("Received delete request: id={}, dbId={}", request.getId(), request.getDbId());
+        
+        boolean result = vectorService.delete(request.getId(), request.getDbId());
+        return ResponseEntity.ok(result);
     }
 }
