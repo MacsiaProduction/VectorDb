@@ -28,11 +28,8 @@ public class OpenApiConfig {
                                 .url("https://opensource.org/licenses/MIT")))
                 .servers(List.of(
                         new Server()
-                                .url("http://localhost:8080")
-                                .description("Development server"),
-                        new Server()
-                                .url("https://api.vectordb.com")
-                                .description("Production server")
+                                .url("/")
+                                .description("Current server")
                 ));
     }
 }

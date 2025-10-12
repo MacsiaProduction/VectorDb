@@ -23,4 +23,10 @@ dependencies {
 
 jar {
     archiveBaseName = 'vector-db-main'
+    enabled = false
+}
+
+bootJar {
+    archiveBaseName = 'vector-db-main'
+    enabled = true
 }

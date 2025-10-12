@@ -8,7 +8,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /app/logs
 
-# Copy the built jar file
+# Copy the built jar file (use the Spring Boot fat jar)
 COPY build/libs/vector-db-main-*.jar app.jar
 
 # Create non-root user for security

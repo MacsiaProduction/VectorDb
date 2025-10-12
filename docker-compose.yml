@@ -10,8 +10,10 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - VECTOR_DB_CLUSTER_SHARDS_0_HOST=vector-db-storage
-      - VECTOR_DB_CLUSTER_SHARDS_0_PORT=8081
+      - STORAGE_MODULE_HOST=vector-db-storage
+      - STORAGE_MODULE_PORT=8081
+      - STORAGE_MODULE_CONNECTION_TIMEOUT=5000
+      - STORAGE_MODULE_READ_TIMEOUT=10000
       - JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
