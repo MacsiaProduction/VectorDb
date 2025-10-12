@@ -7,12 +7,20 @@ spring:
   webflux:
     base-path: /
 
-vector-db:
-  storage:
-    host: localhost
-    port: 8081
-    connection-timeout: 5000
-    read-timeout: 10000
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha
+    tryItOutEnabled: true
+
+storage-module:
+  host: localhost
+  port: 8081
+  connection-timeout: 5000
+  read-timeout: 10000
 
 management:
   endpoints:
@@ -27,3 +35,4 @@ logging:
   level:
     com.vectordb: INFO
     org.springframework.web: DEBUG
+

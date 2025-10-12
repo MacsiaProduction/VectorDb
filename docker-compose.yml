@@ -10,36 +10,32 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - VECTOR_DB_CLUSTER_SHARDS_0_HOST=vector-db-storage-1
+      - VECTOR_DB_CLUSTER_SHARDS_0_HOST=vector-db-storage
       - VECTOR_DB_CLUSTER_SHARDS_0_PORT=8081
-      - VECTOR_DB_CLUSTER_SHARDS_1_HOST=vector-db-storage-2
-      - VECTOR_DB_CLUSTER_SHARDS_1_PORT=8081
       - JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     depends_on:
-      vector-db-storage-1:
-        condition: service_healthy
-      vector-db-storage-2:
+      vector-db-storage:
         condition: service_healthy
     networks:
       - vector-db-network
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1.5G
-        reservations:
-          memory: 512M
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  vector-db-storage-1:
+  vector-db-storage:
     build:
       context: ./storage-module
       dockerfile: Dockerfile
-    container_name: vector-db-storage-1
+    container_name: vector-db-storage
     ports:
       - "8081:8081"
     environment:
@@ -49,48 +45,17 @@ services:
       - SERVER_PORT=8081
       - JAVA_OPTS=-Xms1g -Xmx2g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -Djava.library.path=/usr/lib/x86_64-linux-gnu
     volumes:
-      - vector-db-shard-1-data:/app/data
-      - vector-db-shard-1-logs:/app/logs
+      - vector-db-data:/app/data
+      - vector-db-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/storage/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - vector-db-network
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2.5G
-        reservations:
-          memory: 1G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  vector-db-storage-2:
-    build:
-      context: ./storage-module
-      dockerfile: Dockerfile
-    container_name: vector-db-storage-2
-    ports:
-      - "8082:8081"
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - VECTOR_DB_STORAGE_DATA_PATH=/app/data
-      - VECTOR_DB_STORAGE_SHARD_ID=shard-2
-      - SERVER_PORT=8081
-      - JAVA_OPTS=-Xms1g -Xmx2g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -Djava.library.path=/usr/lib/x86_64-linux-gnu
-    volumes:
-      - vector-db-shard-2-data:/app/data
-      - vector-db-shard-2-logs:/app/logs
-    networks:
-      - vector-db-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2.5G
-        reservations:
-          memory: 1G
     logging:
       driver: "json-file"
       options:
@@ -98,35 +63,11 @@ services:
         max-file: "3"
 
 volumes:
-  vector-db-shard-1-data:
+  vector-db-data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/shard-1
-  vector-db-shard-1-logs:
+  vector-db-logs:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./logs/shard-1
-  vector-db-shard-2-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/shard-2
-  vector-db-shard-2-logs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./logs/shard-2
 
 networks:
   vector-db-network:
     driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.20.0.0/16

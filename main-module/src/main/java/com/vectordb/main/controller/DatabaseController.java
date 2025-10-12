@@ -1,52 +1,71 @@
 package com.vectordb.main.controller;
 
-import com.vectordb.common.model.DatabaseInfo;
-import com.vectordb.common.service.VectorStorageService;
-import jakarta.validation.constraints.NotBlank;
+import com.vectordb.main.service.VectorService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
+import java.util.List;
+
+@Slf4j
 @RestController
-@RequestMapping("/api/v1/databases")
+@RequestMapping("/api/databases")
 @RequiredArgsConstructor
+@Tag(name = "Database Operations", description = "Operations for managing databases in the vector database")
 public class DatabaseController {
     
-    private final VectorStorageService vectorService;
+    private final VectorService vectorService;
     
-    @PostMapping
-    public Mono<ResponseEntity<DatabaseInfo>> createDatabase(
-            @RequestBody CreateDatabaseRequest request) {
-        return Mono.fromSupplier(() -> 
-                vectorService.createDatabase(request.id(), request.name()))
-                   .map(dbInfo -> ResponseEntity.status(HttpStatus.CREATED).body(dbInfo))
-                   .onErrorReturn(ResponseEntity.badRequest().build());
+    @PostMapping("/{dbId}")
+    @Operation(summary = "Create a database", 
+               description = "Create a new database with the specified ID")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Database successfully created"),
+        @ApiResponse(responseCode = "400", description = "Invalid database ID"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during database creation")
+    })
+    public ResponseEntity<Boolean> createDb(
+            @Parameter(description = "Database ID to create", required = true)
+            @PathVariable String dbId) {
+        log.info("Received createDb request: dbId={}", dbId);
+        boolean result = vectorService.createDb(dbId);
+        return ResponseEntity.ok(result);
     }
     
-    @DeleteMapping("/{databaseId}")
-    public Mono<ResponseEntity<Void>> dropDatabase(@PathVariable String databaseId) {
-        return Mono.fromSupplier(() -> vectorService.dropDatabase(databaseId))
-                   .map(deleted -> deleted ? ResponseEntity.noContent().build()
-                                           : ResponseEntity.notFound().build());
-    }
-    
-    @GetMapping("/{databaseId}")
-    public Mono<ResponseEntity<DatabaseInfo>> getDatabaseInfo(@PathVariable String databaseId) {
-        return Mono.fromSupplier(() -> vectorService.getDatabaseInfo(databaseId))
-                   .map(dbInfo -> dbInfo.map(ResponseEntity::ok)
-                                       .orElse(ResponseEntity.notFound().build()));
+    @DeleteMapping("/{dbId}")
+    @Operation(summary = "Drop a database", 
+               description = "Delete the database with the specified ID")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Database successfully dropped"),
+        @ApiResponse(responseCode = "400", description = "Invalid database ID or database does not exist"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during database deletion")
+    })
+    public ResponseEntity<Boolean> dropDb(
+            @Parameter(description = "Database ID to drop", required = true)
+            @PathVariable String dbId) {
+        log.info("Received dropDb request: dbId={}", dbId);
+        boolean result = vectorService.dropDb(dbId);
+        return ResponseEntity.ok(result);
     }
     
     @GetMapping
-    public Flux<DatabaseInfo> listDatabases() {
-        return Flux.fromIterable(vectorService.listDatabases());
+    @Operation(summary = "List all databases", 
+               description = "Get a list of all available database IDs")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved database list"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during database listing")
+    })
+    public ResponseEntity<List<String>> showDBs() {
+        log.info("Received showDBs request");
+        List<String> result = vectorService.showDBs();
+        log.info("Returning {} databases", result.size());
+        return ResponseEntity.ok(result);
     }
     
-    public record CreateDatabaseRequest(
-        @NotBlank String id,
-        @NotBlank String name
-    ) {}
 }

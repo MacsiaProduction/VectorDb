@@ -1,6 +1,7 @@
 package com.vectordb.storage.kv;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.common.model.DatabaseInfo;
 import jakarta.annotation.PostConstruct;
@@ -26,7 +27,7 @@ public class RocksDbStorage implements KeyValueStorage {
     
     private RocksDB rocksDB;
     private final Map<String, ColumnFamilyHandle> columnFamilyHandles = new ConcurrentHashMap<>();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     
     @PostConstruct
     public void initialize() {
