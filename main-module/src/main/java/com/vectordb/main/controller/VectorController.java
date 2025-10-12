@@ -20,7 +20,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/vectors")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", maxAge = 3600)
 @Tag(name = "Vector Operations", description = "Operations for managing vectors in the vector database")
 public class VectorController {
     
