@@ -17,6 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/databases")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*", maxAge = 3600)
 @Tag(name = "Database Operations", description = "Operations for managing databases in the vector database")
 public class DatabaseController {
     
