@@ -8,8 +8,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /app/data /app/logs
 
-# Copy the built jar file (use the plain jar which contains all dependencies)
-COPY build/libs/*-plain.jar app.jar
+# Copy the built jar file (use the Spring Boot fat jar)
+COPY build/libs/vector-db-storage-*.jar app.jar
 
 # Create a volume mount point for persistent data
 VOLUME ["/app/data"]

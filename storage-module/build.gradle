@@ -29,4 +29,10 @@ dependencies {
 
 jar {
     archiveBaseName = 'vector-db-storage'
+    enabled = false
+}
+
+bootJar {
+    archiveBaseName = 'vector-db-storage'
+    enabled = true
 }
