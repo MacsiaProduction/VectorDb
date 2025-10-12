@@ -1,6 +1,6 @@
 package com.vectordb.main.repository;
 
-import com.vectordb.main.model.VectorEntry;
+import com.vectordb.common.model.VectorEntry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
@@ -32,7 +32,7 @@ public class SimpleVectorRepository implements VectorRepository {
         log.debug("Adding vector to database {}", dbId);
         
         String id = String.valueOf(idCounter.getAndIncrement());
-        VectorEntry entryWithId = new VectorEntry(id, vectorEntry.getVector(), vectorEntry.getData());
+        VectorEntry entryWithId = new VectorEntry(id, vectorEntry.embedding(), vectorEntry.originalData(), vectorEntry.metadata());
         
         databases.computeIfAbsent(dbId, k -> new ConcurrentHashMap<>())
                 .put(id, entryWithId);

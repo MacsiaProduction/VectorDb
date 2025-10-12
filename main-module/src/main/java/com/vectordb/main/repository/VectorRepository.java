@@ -1,6 +1,6 @@
 package com.vectordb.main.repository;
 
-import com.vectordb.main.model.VectorEntry;
+import com.vectordb.common.model.VectorEntry;
 
 import java.util.List;
 

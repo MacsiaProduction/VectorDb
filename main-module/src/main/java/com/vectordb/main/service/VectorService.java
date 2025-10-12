@@ -1,6 +1,6 @@
 package com.vectordb.main.service;
 
-import com.vectordb.main.model.VectorEntry;
+import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.repository.VectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +52,7 @@ public class VectorService {
             throw new IllegalArgumentException("Database " + dbId + " does not exist");
         }
         
-        VectorEntry vectorEntry = new VectorEntry(null, vector, data);
+        VectorEntry vectorEntry = new VectorEntry(null, vector, data, null);
         String id = vectorRepository.add(vectorEntry, dbId);
         
         log.debug("Vector added with ID: {}", id);
