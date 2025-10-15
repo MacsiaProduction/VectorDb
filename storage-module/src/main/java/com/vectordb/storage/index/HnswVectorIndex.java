@@ -285,7 +285,7 @@ public class HnswVectorIndex implements VectorIndex {
                     
                     float distance = hnswResult.distance();
                     double similarity = distanceToSimilarity(distance);
-                    results.add(new com.vectordb.common.model.SearchResult(entry, distance, similarity));
+                    results.add(new com.vectordb.common.model.SearchResult(entry, (double)distance, similarity));
                     
                     if (results.size() >= k) {
                         break;
@@ -521,7 +521,7 @@ public class HnswVectorIndex implements VectorIndex {
             
             float distance = calculateDistance(queryVector, vector.embedding());
             double similarity = distanceToSimilarity(distance);
-            results.add(new com.vectordb.common.model.SearchResult(vector, distance, similarity));
+            results.add(new com.vectordb.common.model.SearchResult(vector, (double)distance, similarity));
         }
         
         results.sort(Comparator.comparingDouble(com.vectordb.common.model.SearchResult::distance));

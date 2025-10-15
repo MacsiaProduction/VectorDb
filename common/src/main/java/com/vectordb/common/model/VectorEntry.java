@@ -17,6 +17,7 @@ import java.time.Instant;
  */
 @Builder
 public record VectorEntry(
+    @NotNull
     @JsonProperty("id")
     Long id,
     
@@ -25,19 +26,34 @@ public record VectorEntry(
     @JsonProperty("embedding")
     float[] embedding,
     
+    @NotNull
     @JsonProperty("originalData")
     String originalData,
     
+    @NotNull
     @JsonProperty("databaseId")
     String databaseId,
     
+    @NotNull
     @JsonProperty("createdAt")
     Instant createdAt
 ) implements Serializable, Item<Long, float[]> {
     @JsonCreator
     public VectorEntry {
+        if (id == null) {
+            throw new IllegalArgumentException("ID cannot be null");
+        }
         if (embedding == null || embedding.length == 0) {
             throw new IllegalArgumentException("Embedding cannot be null or empty");
+        }
+        if (originalData == null) {
+            throw new IllegalArgumentException("Original data cannot be null");
+        }
+        if (databaseId == null) {
+            throw new IllegalArgumentException("Database ID cannot be null");
+        }
+        if (createdAt == null) {
+            throw new IllegalArgumentException("Created at cannot be null");
         }
     }
     
