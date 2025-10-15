@@ -76,7 +76,13 @@ public class HnswVectorIndex implements VectorIndex {
     
     /** Получить или создать индекс для БД */
     private DatabaseIndex getOrCreateDatabaseIndex(String databaseId) {
-        return databaseIndices.computeIfAbsent(databaseId, _ -> new DatabaseIndex());
+        return databaseIndices.computeIfAbsent(databaseId, _ -> {
+            DatabaseIndex dbIndex = new DatabaseIndex();
+            if (defaultDimension > 0) {
+                dbIndex.dimension = defaultDimension;
+            }
+            return dbIndex;
+        });
     }
     
     @Override
@@ -229,7 +235,7 @@ public class HnswVectorIndex implements VectorIndex {
             if (!dbIndex.isBuilt || dbIndex.hnswIndex == null) {
                 log.debug("Index not built for database {}, performing linear search on {} buffered vectors", 
                         databaseId, dbIndex.vectorBuffer.size());
-                return linearSearch(queryVector, k, dbIndex.vectorBuffer);
+                return linearSearch(queryVector, k, dbIndex.vectorBuffer, databaseId);
             }
             
             if (queryVector.length != dbIndex.dimension) {
@@ -501,7 +507,18 @@ public class HnswVectorIndex implements VectorIndex {
     /**
      * Линейный поиск по коллекции векторов (резервный метод)
      */
-    private List<com.vectordb.common.model.SearchResult> linearSearch(double[] queryVector, int k, List<VectorEntry> vectors) {
+    private List<com.vectordb.common.model.SearchResult> linearSearch(double[] queryVector, int k, List<VectorEntry> vectors, String databaseId) {
+        DatabaseIndex dbIndex = databaseIndices.get(databaseId);
+        if (dbIndex == null) {
+            return List.of();
+        }
+        
+        // Validate query vector dimension
+        if (dbIndex.dimension > 0 && queryVector.length != dbIndex.dimension) {
+            throw new IllegalArgumentException(
+                String.format("Query vector dimension mismatch for database %s. Expected: %d, got: %d",
+                    databaseId, dbIndex.dimension, queryVector.length));
+        }
         
         List<com.vectordb.common.model.SearchResult> results = new ArrayList<>();
         
