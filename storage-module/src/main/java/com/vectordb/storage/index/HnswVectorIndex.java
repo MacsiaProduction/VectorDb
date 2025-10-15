@@ -55,6 +55,7 @@ public class HnswVectorIndex implements VectorIndex {
     }
     
     private final Map<String, DatabaseIndex> databaseIndices = new ConcurrentHashMap<>();
+    private int defaultDimension = -1;
     
     public HnswVectorIndex(
             VectorSimilarity vectorSimilarity,
@@ -75,7 +76,13 @@ public class HnswVectorIndex implements VectorIndex {
     
     /** Получить или создать индекс для БД */
     private DatabaseIndex getOrCreateDatabaseIndex(String databaseId) {
-        return databaseIndices.computeIfAbsent(databaseId, k -> new DatabaseIndex());
+        return databaseIndices.computeIfAbsent(databaseId, _ -> {
+            DatabaseIndex dbIndex = new DatabaseIndex();
+            if (defaultDimension > 0) {
+                dbIndex.dimension = defaultDimension;
+            }
+            return dbIndex;
+        });
     }
     
     @Override
@@ -84,12 +91,26 @@ public class HnswVectorIndex implements VectorIndex {
         try {
             DatabaseIndex dbIndex = getOrCreateDatabaseIndex(databaseId);
             
+            // Check if dimension is set
+            if (dbIndex.dimension == -1) {
+                throw new IllegalStateException("Dimension must be set before building index for database " + databaseId);
+            }
+            
             if (dbIndex.vectorBuffer.isEmpty()) {
-                log.info("Nothing to build for database {}", databaseId);
+                // Create empty index
+                DistanceFunction<float[], Float> distanceFunction = createDistanceFunction();
+                
+                dbIndex.hnswIndex = HnswIndex.newBuilder(dbIndex.dimension, distanceFunction, maxElements)
+                    .withM(m)
+                    .withEfConstruction(efConstruction)
+                    .withEf(efSearch)
+                    .build();
+                
+                dbIndex.isBuilt = true;
+                log.info("Built empty HNSW index for database {} with dimension={}", databaseId, dbIndex.dimension);
                 return;
             }
             
-            dbIndex.dimension = dbIndex.vectorBuffer.getFirst().dimension();
             log.info("Building HNSW index for database {} with {} vectors, dimension={}", 
                     databaseId, dbIndex.vectorBuffer.size(), dbIndex.dimension);
             
@@ -131,7 +152,7 @@ public class HnswVectorIndex implements VectorIndex {
             
             if (!dbIndex.isBuilt) {
                 if (dbIndex.dimension == -1) {
-                    dbIndex.dimension = vector.dimension();
+                    throw new IllegalStateException("Dimension must be set before adding vectors to database " + databaseId);
                 } else if (dbIndex.dimension != vector.dimension()) {
                     throw new IllegalArgumentException(
                         String.format("Vector dimension mismatch for database %s. Expected: %d, got: %d",
@@ -214,7 +235,7 @@ public class HnswVectorIndex implements VectorIndex {
             if (!dbIndex.isBuilt || dbIndex.hnswIndex == null) {
                 log.debug("Index not built for database {}, performing linear search on {} buffered vectors", 
                         databaseId, dbIndex.vectorBuffer.size());
-                return linearSearch(queryVector, k, dbIndex.vectorBuffer);
+                return linearSearch(queryVector, k, dbIndex.vectorBuffer, databaseId);
             }
             
             if (queryVector.length != dbIndex.dimension) {
@@ -338,6 +359,7 @@ public class HnswVectorIndex implements VectorIndex {
                 dbIndex.idToEntry.putAll(loadedIdToEntry);
                 
                 dbIndex.dimension = in.readInt();
+                @SuppressWarnings("unused")
                 String loadedSpaceType = (String) in.readObject();
                 
                 @SuppressWarnings("unchecked")
@@ -421,6 +443,30 @@ public class HnswVectorIndex implements VectorIndex {
         }
     }
     
+    @Override
+    public void setDimension(int dimension) {
+        lock.writeLock().lock();
+        try {
+            if (dimension <= 0) {
+                throw new IllegalArgumentException("Dimension must be positive");
+            }
+            // Set dimension for all databases that don't have it set yet
+            for (DatabaseIndex dbIndex : databaseIndices.values()) {
+                if (dbIndex.isBuilt) {
+                    throw new IllegalStateException("Cannot set dimension after index is built");
+                }
+                if (dbIndex.dimension == -1) {
+                    dbIndex.dimension = dimension;
+                }
+            }
+            // Set default dimension for future databases
+            this.defaultDimension = dimension;
+            log.info("Set index dimension to {}", dimension);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+    
     /**
      * Создание функции расстояния на основе типа пространства
      */
@@ -461,7 +507,19 @@ public class HnswVectorIndex implements VectorIndex {
     /**
      * Линейный поиск по коллекции векторов (резервный метод)
      */
-    private List<com.vectordb.common.model.SearchResult> linearSearch(double[] queryVector, int k, List<VectorEntry> vectors) {
+    private List<com.vectordb.common.model.SearchResult> linearSearch(double[] queryVector, int k, List<VectorEntry> vectors, String databaseId) {
+        DatabaseIndex dbIndex = databaseIndices.get(databaseId);
+        if (dbIndex == null) {
+            return List.of();
+        }
+        
+        // Validate query vector dimension
+        if (dbIndex.dimension > 0 && queryVector.length != dbIndex.dimension) {
+            throw new IllegalArgumentException(
+                String.format("Query vector dimension mismatch for database %s. Expected: %d, got: %d",
+                    databaseId, dbIndex.dimension, queryVector.length));
+        }
+        
         List<com.vectordb.common.model.SearchResult> results = new ArrayList<>();
         
         for (VectorEntry vector : vectors) {

@@ -1,9 +1,9 @@
 package com.vectordb.main.controller;
 
+import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.dto.AddVectorRequest;
 import com.vectordb.main.dto.DeleteVectorRequest;
 import com.vectordb.main.dto.GetTopKRequest;
-import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.service.VectorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

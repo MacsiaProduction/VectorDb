@@ -1,5 +1,6 @@
 package com.vectordb.main.repository;
 
+import com.vectordb.common.model.DatabaseInfo;
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.exception.VectorRepositoryException;
 
@@ -42,10 +43,11 @@ public interface VectorRepository {
     /**
      * Create a new database
      * @param dbId database identifier
+     * @param dimension vector dimension
      * @return true if database was created successfully
      * @throws VectorRepositoryException if creation fails
      */
-    boolean createDatabase(String dbId) throws VectorRepositoryException;
+    boolean createDatabase(String dbId, int dimension) throws VectorRepositoryException;
     
     /**
      * Drop a database
@@ -56,10 +58,10 @@ public interface VectorRepository {
     boolean dropDatabase(String dbId) throws VectorRepositoryException;
     
     /**
-     * Get list of all available database IDs
-     * @return list of database IDs
+     * Get list of all available databases
+     * @return list of database information
      * @throws VectorRepositoryException if listing fails
      */
-    List<String> getAllDatabaseIds() throws VectorRepositoryException;
+    List<DatabaseInfo> getAllDatabases() throws VectorRepositoryException;
     
 }

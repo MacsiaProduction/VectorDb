@@ -22,9 +22,9 @@ public interface VectorStorageService {
     
     /** Поиск похожих векторов (KNN) */
     List<SearchResult> search(SearchQuery query);
-    
+
     /** Создать новую базу данных */
-    DatabaseInfo createDatabase(String databaseId, String name);
+    DatabaseInfo createDatabase(String databaseId, String name, int dimension);
     
     /** Удалить базу данных */
     boolean dropDatabase(String databaseId);
