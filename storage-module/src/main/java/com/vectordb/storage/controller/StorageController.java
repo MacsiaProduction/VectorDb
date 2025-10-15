@@ -6,6 +6,7 @@ import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.DatabaseInfo;
 import com.vectordb.storage.service.VectorStorageService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -64,7 +65,7 @@ public class StorageController {
     @PostMapping("/databases")
     public ResponseEntity<DatabaseInfo> createDatabase(@Valid @RequestBody CreateDatabaseRequest request) {
         try {
-            DatabaseInfo dbInfo = storageService.createDatabase(request.id(), request.name());
+            DatabaseInfo dbInfo = storageService.createDatabase(request.id(), request.name(), request.dimension());
             return ResponseEntity.status(HttpStatus.CREATED).body(dbInfo);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
@@ -106,6 +107,7 @@ public class StorageController {
     
     public record CreateDatabaseRequest(
         @NotBlank String id, 
-        @NotBlank String name
+        @NotBlank String name,
+        @Min(1) int dimension
     ) {}
 }

@@ -18,6 +18,10 @@ public record DatabaseInfo(
     @JsonProperty("name")
     String name,
     
+    @Min(1)
+    @JsonProperty("dimension")
+    int dimension,
+    
     @Min(0)
     @JsonProperty("vectorCount")
     long vectorCount,
@@ -30,23 +34,20 @@ public record DatabaseInfo(
 ) {
     @JsonCreator
     public DatabaseInfo {
-        if (vectorCount < 0) {
-            throw new IllegalArgumentException("Vector count cannot be negative");
-        }
     }
     
     /**
      * Creates a new database info with updated vector count
      */
     public DatabaseInfo withVectorCount(long newCount) {
-        return new DatabaseInfo(id, name, newCount, createdAt, LocalDateTime.now());
+        return new DatabaseInfo(id, name, dimension, newCount, createdAt, LocalDateTime.now());
     }
     
     /**
      * Creates database info for new database
      */
-    public static DatabaseInfo forNewDatabase(String id, String name) {
+    public static DatabaseInfo forNewDatabase(String id, String name, int dimension) {
         LocalDateTime now = LocalDateTime.now();
-        return new DatabaseInfo(id, name, 0, now, now);
+        return new DatabaseInfo(id, name, dimension, 0, now, now);
     }
 }

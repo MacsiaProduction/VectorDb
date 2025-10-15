@@ -1,5 +1,7 @@
 package com.vectordb.main.controller;
 
+import com.vectordb.common.model.DatabaseInfo;
+import com.vectordb.main.dto.CreateDatabaseRequest;
 import com.vectordb.main.service.VectorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -10,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -22,19 +25,17 @@ public class DatabaseController {
     
     private final VectorService vectorService;
     
-    @PostMapping("/{dbId}")
+    @PostMapping
     @Operation(summary = "Create a database", 
-               description = "Create a new database with the specified ID")
+               description = "Create a new database with the specified ID and vector dimension. The dimension parameter determines the size of vectors that can be stored in this database.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Database successfully created"),
-        @ApiResponse(responseCode = "400", description = "Invalid database ID"),
+        @ApiResponse(responseCode = "400", description = "Invalid database ID or dimension"),
         @ApiResponse(responseCode = "500", description = "Internal server error during database creation")
     })
-    public ResponseEntity<Boolean> createDb(
-            @Parameter(description = "Database ID to create", required = true)
-            @PathVariable String dbId) {
-        log.info("Received createDb request: dbId={}", dbId);
-        boolean result = vectorService.createDb(dbId);
+    public ResponseEntity<Boolean> createDb(@Valid @RequestBody CreateDatabaseRequest request) {
+        log.info("Received createDb request: dbId={}, dimension={}", request.id(), request.dimension());
+        boolean result = vectorService.createDb(request.id(), request.dimension());
         return ResponseEntity.ok(result);
     }
     
@@ -56,14 +57,14 @@ public class DatabaseController {
     
     @GetMapping
     @Operation(summary = "List all databases", 
-               description = "Get a list of all available database IDs")
+               description = "Get a list of all available databases with their complete information including dimension, vector count, and timestamps")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Successfully retrieved database list"),
+        @ApiResponse(responseCode = "200", description = "Successfully retrieved database list with full information"),
         @ApiResponse(responseCode = "500", description = "Internal server error during database listing")
     })
-    public ResponseEntity<List<String>> showDBs() {
+    public ResponseEntity<List<DatabaseInfo>> showDBs() {
         log.info("Received showDBs request");
-        List<String> result = vectorService.showDBs();
+        List<DatabaseInfo> result = vectorService.showDBs();
         log.info("Returning {} databases", result.size());
         return ResponseEntity.ok(result);
     }

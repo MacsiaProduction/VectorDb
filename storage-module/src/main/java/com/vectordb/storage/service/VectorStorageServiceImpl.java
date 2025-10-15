@@ -121,17 +121,20 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     }
     
     @Override
-    public DatabaseInfo createDatabase(String databaseId, String name) {
+    public DatabaseInfo createDatabase(String databaseId, String name, int dimension) {
         try {
             Optional<DatabaseInfo> existing = storage.getDatabaseInfo(databaseId);
             if (existing.isPresent()) {
                 throw new IllegalArgumentException("Database already exists: " + databaseId);
             }
             
-            DatabaseInfo dbInfo = DatabaseInfo.forNewDatabase(databaseId, name);
+            DatabaseInfo dbInfo = DatabaseInfo.forNewDatabase(databaseId, name, dimension);
             storage.putDatabaseInfo(dbInfo);
             
-            log.info("Created database: {}", databaseId);
+            // Set dimension for vector index
+            vectorIndex.setDimension(dimension);
+            
+            log.info("Created database: {} with dimension: {}", databaseId, dimension);
             return dbInfo;
             
         } catch (Exception e) {

@@ -6,6 +6,7 @@ dependencies {
     api 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
     api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
     api 'jakarta.validation:jakarta.validation-api:3.1.0'
+    api 'io.swagger.core.v3:swagger-annotations:2.2.22'
     
     // Test dependencies for common module
     testImplementation 'org.springframework:spring-test:6.1.13'

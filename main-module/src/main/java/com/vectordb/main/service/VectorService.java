@@ -1,5 +1,6 @@
 package com.vectordb.main.service;
 
+import com.vectordb.common.model.DatabaseInfo;
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.exception.VectorRepositoryException;
 import com.vectordb.main.repository.VectorRepository;
@@ -63,11 +64,12 @@ public class VectorService {
     /**
      * Create a new database
      * @param dbId database identifier
+     * @param dimension vector dimension
      * @return true if database was created successfully
      */
-    public boolean createDb(String dbId) throws VectorRepositoryException {
-        log.debug("Creating database {}", dbId);
-        return vectorRepository.createDatabase(dbId);
+    public boolean createDb(String dbId, int dimension) throws VectorRepositoryException {
+        log.debug("Creating database {} with dimension {}", dbId, dimension);
+        return vectorRepository.createDatabase(dbId, dimension);
     }
     
     /**
@@ -82,13 +84,13 @@ public class VectorService {
     
     /**
      * Get list of all available databases
-     * @return list of database IDs
+     * @return list of database information
      */
-    public List<String> showDBs() throws VectorRepositoryException {
+    public List<DatabaseInfo> showDBs() throws VectorRepositoryException {
         log.debug("Listing all databases");
         
-        List<String> dbIds = vectorRepository.getAllDatabaseIds();
-        log.debug("Found {} databases: {}", dbIds.size(), dbIds);
-        return dbIds;
+        List<DatabaseInfo> databases = vectorRepository.getAllDatabases();
+        log.debug("Found {} databases", databases.size());
+        return databases;
     }
 }

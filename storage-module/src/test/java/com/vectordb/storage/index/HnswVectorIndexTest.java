@@ -36,6 +36,8 @@ class HnswVectorIndexTest {
             100,     // efSearch
             "cosine" // spaceType
         );
+        // Set dimension for all tests
+        hnswIndex.setDimension(3);
     }
     
     @Test
@@ -206,6 +208,18 @@ class HnswVectorIndexTest {
     }
     
     @Test
+    void testSearchDimensionMismatchOnUnbuiltIndex() {
+        VectorEntry vector = VectorEntry.builder()
+            .id("test1")
+            .embedding(new double[]{1.0, 0.0, 0.0})
+            .build();
+        
+        hnswIndex.add(vector, TEST_DB_ID);
+        double[] wrongDimensionQuery = {1.0, 0.0};
+        assertThrows(IllegalArgumentException.class, () -> hnswIndex.search(wrongDimensionQuery, 1, TEST_DB_ID));
+    }
+    
+    @Test
     void testSaveAndLoad() {
         // Build index with test data
         VectorEntry vector1 = VectorEntry.builder()
@@ -294,6 +308,7 @@ class HnswVectorIndexTest {
         HnswVectorIndex euclideanIndex = new HnswVectorIndex(
             vectorSimilarity, 1000, 16, 200, 100, "euclidean"
         );
+        euclideanIndex.setDimension(3);
         
         VectorEntry vector = VectorEntry.builder()
             .id("test1")
@@ -315,6 +330,7 @@ class HnswVectorIndexTest {
         HnswVectorIndex manhattanIndex = new HnswVectorIndex(
             vectorSimilarity, 1000, 16, 200, 100, "manhattan"
         );
+        manhattanIndex.setDimension(3);
         
         VectorEntry vector = VectorEntry.builder()
             .id("test1")
@@ -440,6 +456,48 @@ class HnswVectorIndexTest {
         assertFalse(results.stream().anyMatch(r -> r.entry().id().equals("test1")));
         assertTrue(results.stream().anyMatch(r -> r.entry().id().equals("test2")));
         assertTrue(results.stream().anyMatch(r -> r.entry().id().equals("test3")));
+    }
+    
+    @Test
+    void testAddVectorWithoutSettingDimension() {
+        // Create new index without setting dimension
+        HnswVectorIndex newIndex = new HnswVectorIndex(
+            vectorSimilarity, 1000, 16, 200, 100, "cosine"
+        );
+        
+        VectorEntry vector = VectorEntry.builder()
+            .id("test1")
+            .embedding(new double[]{1.0, 0.0, 0.0})
+            .build();
+        
+        // Should throw exception when trying to add vector without setting dimension
+        assertThrows(IllegalStateException.class, () -> newIndex.add(vector, TEST_DB_ID));
+    }
+    
+    @Test
+    void testBuildIndexWithoutSettingDimension() {
+        // Create new index without setting dimension
+        HnswVectorIndex newIndex = new HnswVectorIndex(
+            vectorSimilarity, 1000, 16, 200, 100, "cosine"
+        );
+        
+        // Should throw exception when trying to build index without setting dimension
+        assertThrows(RuntimeException.class, () -> newIndex.build(TEST_DB_ID));
+    }
+    
+    @Test
+    void testSetDimensionAfterBuilding() {
+        hnswIndex.build(TEST_DB_ID);
+        
+        // Should throw exception when trying to set dimension after building
+        assertThrows(IllegalStateException.class, () -> hnswIndex.setDimension(5));
+    }
+    
+    @Test
+    void testSetInvalidDimension() {
+        // Should throw exception for invalid dimension
+        assertThrows(IllegalArgumentException.class, () -> hnswIndex.setDimension(0));
+        assertThrows(IllegalArgumentException.class, () -> hnswIndex.setDimension(-1));
     }
     
     @Test

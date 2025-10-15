@@ -78,4 +78,10 @@ public interface VectorIndex {
      * @param databaseId ID базы данных
      */
     boolean isBuilt(String databaseId);
+    
+    /**
+     * Set the dimension for the index
+     * @param dimension the vector dimension
+     */
+    void setDimension(int dimension);
 }

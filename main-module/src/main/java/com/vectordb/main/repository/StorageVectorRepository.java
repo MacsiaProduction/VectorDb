@@ -74,11 +74,11 @@ public class StorageVectorRepository implements VectorRepository {
     }
     
     @Override
-    public boolean createDatabase(String dbId) throws VectorRepositoryException {
-        log.debug("Creating database {} via storage", dbId);
+    public boolean createDatabase(String dbId, int dimension) throws VectorRepositoryException {
+        log.debug("Creating database {} with dimension {} via storage", dbId, dimension);
         
         try {
-            return storageClient.createDatabase(dbId, "Database " + dbId)
+            return storageClient.createDatabase(dbId, "Database " + dbId, dimension)
                     .toFuture()
                     .get() != null;
         } catch (Exception e) {
@@ -105,19 +105,16 @@ public class StorageVectorRepository implements VectorRepository {
     }
     
     @Override
-    public List<String> getAllDatabaseIds() throws VectorRepositoryException {
-        log.debug("Getting all database IDs via storage");
+    public List<DatabaseInfo> getAllDatabases() throws VectorRepositoryException {
+        log.debug("Getting all databases via storage");
         
         try {
             return storageClient.listDatabases()
                     .toFuture()
-                    .get()
-                    .stream()
-                    .map(DatabaseInfo::id)
-                    .toList();
+                    .get();
         } catch (Exception e) {
-            log.error("Failed to get database IDs: {}", e.getMessage());
-            throw new VectorRepositoryException("Failed to get database IDs", e);
+            log.error("Failed to get databases: {}", e.getMessage());
+            throw new VectorRepositoryException("Failed to get databases", e);
         }
     }
     

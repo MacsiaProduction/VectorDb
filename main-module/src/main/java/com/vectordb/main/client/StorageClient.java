@@ -73,10 +73,10 @@ public class StorageClient {
                 .doOnError(error -> log.error("Failed to search vectors: {}", error.getMessage()));
     }
     
-    public Mono<DatabaseInfo> createDatabase(String id, String name) {
-        log.debug("Creating database {} with name {} via storage service", id, name);
+    public Mono<DatabaseInfo> createDatabase(String id, String name, int dimension) {
+        log.debug("Creating database {} with name {} and dimension {} via storage service", id, name, dimension);
         
-        CreateDatabaseRequest request = new CreateDatabaseRequest(id, name);
+        CreateDatabaseRequest request = new CreateDatabaseRequest(id, name, dimension);
         
         return storageWebClient
                 .post()
@@ -149,5 +149,5 @@ public class StorageClient {
                 .doOnSuccess(healthy -> log.debug("Storage service health: {}", healthy ? "UP" : "DOWN"));
     }
     
-    public record CreateDatabaseRequest(String id, String name) {}
+    public record CreateDatabaseRequest(String id, String name, int dimension) {}
 }
