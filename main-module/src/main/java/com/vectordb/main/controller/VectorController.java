@@ -55,13 +55,13 @@ public class VectorController {
         @ApiResponse(responseCode = "404", description = "Database not found"),
         @ApiResponse(responseCode = "500", description = "Internal server error during vector addition")
     })
-    public ResponseEntity<String> add(@RequestBody AddVectorRequest request) {
-        log.info("Received add request: vector length={}, data={}, dbId={}", 
+    public ResponseEntity<Long> add(@RequestBody AddVectorRequest request) {
+        log.info("Received add request: vector length={}, data={}, dbId={}",
                 request.getVector() != null ? request.getVector().length : 0,
                 request.getData(),
                 request.getDbId());
         
-        String result = vectorService.add(request.getVector(), request.getData(), request.getDbId());
+        Long result = vectorService.add(request.getVector(), request.getData(), request.getDbId());
         return ResponseEntity.ok(result);
     }
     

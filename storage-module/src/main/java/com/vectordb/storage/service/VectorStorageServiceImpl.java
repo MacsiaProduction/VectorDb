@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @RequiredArgsConstructor
@@ -22,8 +22,10 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     private final RocksDbStorage storage;
     private final VectorIndex vectorIndex;
     
+    private final AtomicLong idGenerator = new AtomicLong(System.currentTimeMillis());
+    
     @Override
-    public String add(VectorEntry entry, String databaseId) {
+    public Long add(VectorEntry entry, String databaseId) {
         try {
             // Validate that database exists
             Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
@@ -32,7 +34,7 @@ public class VectorStorageServiceImpl implements VectorStorageService {
             }
             
             // Generate unique ID for the vector
-            String vectorId = generateVectorId();
+            Long vectorId = generateVectorId();
             VectorEntry entryWithId = entry.withId(vectorId);
             
             storage.putVector(databaseId, entryWithId);
@@ -56,12 +58,12 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     /**
      * Generate unique vector ID
      */
-    private String generateVectorId() {
-        return UUID.randomUUID().toString();
+    private Long generateVectorId() {
+        return idGenerator.incrementAndGet();
     }
     
     @Override
-    public Optional<VectorEntry> get(String id, String databaseId) {
+    public Optional<VectorEntry> get(Long id, String databaseId) {
         try {
             return storage.getVector(databaseId, id);
         } catch (Exception e) {
@@ -71,7 +73,7 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     }
     
     @Override
-    public boolean delete(String id, String databaseId) {
+    public boolean delete(Long id, String databaseId) {
         try {
             boolean deleted = storage.deleteVector(databaseId, id);
             

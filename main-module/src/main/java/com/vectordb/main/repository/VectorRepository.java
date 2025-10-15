@@ -29,7 +29,7 @@ public interface VectorRepository {
      * @return generated ID for the saved vector
      * @throws VectorRepositoryException if save fails
      */
-    String add(VectorEntry vectorEntry, String dbId) throws VectorRepositoryException;
+    Long add(VectorEntry vectorEntry, String dbId) throws VectorRepositoryException;
     
     /**
      * Delete a vector by ID from the specified database
@@ -38,7 +38,7 @@ public interface VectorRepository {
      * @return true if vector was deleted, false otherwise
      * @throws VectorRepositoryException if delete fails
      */
-    boolean deleteById(String id, String dbId) throws VectorRepositoryException;
+    boolean deleteById(Long id, String dbId) throws VectorRepositoryException;
     
     /**
      * Create a new database

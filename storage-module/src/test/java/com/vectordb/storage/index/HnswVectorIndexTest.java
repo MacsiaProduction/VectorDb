@@ -44,7 +44,7 @@ class HnswVectorIndexTest {
     /**
      * Helper method to create test VectorEntry with minimal required fields
      */
-    private VectorEntry createTestVector(String id, float[] embedding) {
+    private VectorEntry createTestVector(Long id, float[] embedding) {
         Instant now = Instant.now();
         return VectorEntry.builder()
             .id(id)
@@ -64,7 +64,7 @@ class HnswVectorIndexTest {
     
     @Test
     void testAddVectorToUnbuiltIndex() {
-        VectorEntry vector = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         
         hnswIndex.add(vector, TEST_DB_ID);
         
@@ -83,9 +83,9 @@ class HnswVectorIndexTest {
     @Test
     void testBuildIndexWithVectors() {
         // Add test vectors
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("test2", new float[]{0.0f, 1.0f, 0.0f});
-        VectorEntry vector3 = createTestVector("test3", new float[]{0.5f, 0.5f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(2L, new float[]{0.0f, 1.0f, 0.0f});
+        VectorEntry vector3 = createTestVector(3L, new float[]{0.5f, 0.5f, 0.0f});
         
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
@@ -103,9 +103,9 @@ class HnswVectorIndexTest {
     @Test
     void testSearchOnBuiltIndex() {
         // Add and build index
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("test2", new float[]{0.0f, 1.0f, 0.0f});
-        VectorEntry vector3 = createTestVector("test3", new float[]{0.5f, 0.5f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(2L, new float[]{0.0f, 1.0f, 0.0f});
+        VectorEntry vector3 = createTestVector(3L, new float[]{0.5f, 0.5f, 0.0f});
         
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
@@ -132,7 +132,7 @@ class HnswVectorIndexTest {
     @Test
     void testSearchOnUnbuiltIndex() {
         // Add vectors but don't build
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         
         hnswIndex.add(vector1, TEST_DB_ID);
         
@@ -141,7 +141,7 @@ class HnswVectorIndexTest {
         List<SearchResult> results = hnswIndex.search(queryVector, 1, TEST_DB_ID);
         
         assertEquals(1, results.size());
-        assertEquals("test1", results.getFirst().entry().id());
+        assertEquals(1L, results.getFirst().entry().id());
     }
     
     @Test
@@ -151,7 +151,7 @@ class HnswVectorIndexTest {
         assertTrue(hnswIndex.isBuilt(TEST_DB_ID));
         
         // Add vector to built index
-        VectorEntry vector = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         
         hnswIndex.add(vector, TEST_DB_ID);
         assertEquals(1, hnswIndex.size(TEST_DB_ID));
@@ -160,8 +160,8 @@ class HnswVectorIndexTest {
     
     @Test
     void testDimensionConsistency() {
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("test2", new float[]{1.0f, 0.0f}); // Different dimension
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(2L, new float[]{1.0f, 0.0f}); // Different dimension
         
         hnswIndex.add(vector1, TEST_DB_ID);
         
@@ -171,7 +171,7 @@ class HnswVectorIndexTest {
     
     @Test
     void testSearchDimensionMismatch() {
-        VectorEntry vector = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         
         hnswIndex.add(vector, TEST_DB_ID);
         hnswIndex.build(TEST_DB_ID);
@@ -196,8 +196,8 @@ class HnswVectorIndexTest {
     @Test
     void testSaveAndLoad() {
         // Build index with test data
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("test2", new float[]{0.0f, 1.0f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(2L, new float[]{0.0f, 1.0f, 0.0f});
         
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
@@ -222,12 +222,12 @@ class HnswVectorIndexTest {
         List<SearchResult> results = loadedIndex.search(queryVector, 1, TEST_DB_ID);
         
         assertEquals(1, results.size());
-        assertEquals("test1", results.getFirst().entry().id());
+        assertEquals(1L, results.getFirst().entry().id());
     }
     
     @Test
     void testSaveUnbuiltIndex() {
-        VectorEntry vector = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         
         hnswIndex.add(vector, TEST_DB_ID);
         // Don't build index
@@ -248,7 +248,7 @@ class HnswVectorIndexTest {
     @Test
     void testClearIndex() {
         // Add vectors and build
-        VectorEntry vector = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         
         hnswIndex.add(vector, TEST_DB_ID);
         hnswIndex.build(TEST_DB_ID);
@@ -271,7 +271,7 @@ class HnswVectorIndexTest {
         );
         euclideanIndex.setDimension(3);
 
-        VectorEntry vector = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         
         euclideanIndex.add(vector, TEST_DB_ID);
         euclideanIndex.build(TEST_DB_ID);
@@ -290,7 +290,7 @@ class HnswVectorIndexTest {
         );
         manhattanIndex.setDimension(3);
 
-        VectorEntry vector = createTestVector("test1", new float[]{1.0f, 1.0f, 0.0f});
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 1.0f, 0.0f});
         
         manhattanIndex.add(vector, TEST_DB_ID);
         manhattanIndex.build(TEST_DB_ID);
@@ -304,20 +304,20 @@ class HnswVectorIndexTest {
     
     @Test
     void testRemoveVectorFromUnbuiltIndex() {
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("test2", new float[]{0.0f, 1.0f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(2L, new float[]{0.0f, 1.0f, 0.0f});
         
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
         assertEquals(2, hnswIndex.size(TEST_DB_ID));
         
         // Remove from unbuilt index (should remove from buffer)
-        boolean removed = hnswIndex.remove("test1", TEST_DB_ID);
+        boolean removed = hnswIndex.remove(1L, TEST_DB_ID);
         assertTrue(removed);
         assertEquals(1, hnswIndex.size(TEST_DB_ID));
         
         // Try to remove non-existent vector
-        boolean notRemoved = hnswIndex.remove("nonexistent", TEST_DB_ID);
+        boolean notRemoved = hnswIndex.remove(999L, TEST_DB_ID);
         assertFalse(notRemoved);
         assertEquals(1, hnswIndex.size(TEST_DB_ID));
     }
@@ -325,9 +325,9 @@ class HnswVectorIndexTest {
     @Test
     void testRemoveVectorFromBuiltIndex() {
         // Add and build index
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("test2", new float[]{0.0f, 1.0f, 0.0f});
-        VectorEntry vector3 = createTestVector("test3", new float[]{0.5f, 0.5f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(2L, new float[]{0.0f, 1.0f, 0.0f});
+        VectorEntry vector3 = createTestVector(3L, new float[]{0.5f, 0.5f, 0.0f});
         
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
@@ -338,7 +338,7 @@ class HnswVectorIndexTest {
         assertTrue(hnswIndex.isBuilt(TEST_DB_ID));
         
         // Remove from built index
-        boolean removed = hnswIndex.remove("test2", TEST_DB_ID);
+        boolean removed = hnswIndex.remove(2L, TEST_DB_ID);
         assertTrue(removed);
         assertEquals(2, hnswIndex.size(TEST_DB_ID));
         
@@ -347,30 +347,30 @@ class HnswVectorIndexTest {
         List<SearchResult> results = hnswIndex.search(queryVector, 3, TEST_DB_ID);
         
         // Should not find the removed vector in results
-        assertFalse(results.stream().anyMatch(r -> r.entry().id().equals("test2")));
+        assertFalse(results.stream().anyMatch(r -> r.entry().id().equals(2L)));
         
         // Try to remove non-existent vector
-        boolean notRemoved = hnswIndex.remove("nonexistent", TEST_DB_ID);
+        boolean notRemoved = hnswIndex.remove(999L, TEST_DB_ID);
         assertFalse(notRemoved);
     }
     
     @Test
     void testRemoveAndAddToBuiltIndex() {
         // Add and build index
-        VectorEntry vector1 = createTestVector("test1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("test2", new float[]{0.0f, 1.0f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(2L, new float[]{0.0f, 1.0f, 0.0f});
         
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
         hnswIndex.build(TEST_DB_ID);
         
         // Remove one vector
-        boolean removed = hnswIndex.remove("test1", TEST_DB_ID);
+        boolean removed = hnswIndex.remove(1L, TEST_DB_ID);
         assertTrue(removed);
         assertEquals(1, hnswIndex.size(TEST_DB_ID));
         
         // Add a new vector
-        VectorEntry vector3 = createTestVector("test3", new float[]{0.5f, 0.5f, 0.0f});
+        VectorEntry vector3 = createTestVector(3L, new float[]{0.5f, 0.5f, 0.0f});
         
         hnswIndex.add(vector3, TEST_DB_ID);
         assertEquals(2, hnswIndex.size(TEST_DB_ID));
@@ -380,9 +380,9 @@ class HnswVectorIndexTest {
         List<SearchResult> results = hnswIndex.search(queryVector, 2, TEST_DB_ID);
         
         assertEquals(2, results.size());
-        assertFalse(results.stream().anyMatch(r -> r.entry().id().equals("test1")));
-        assertTrue(results.stream().anyMatch(r -> r.entry().id().equals("test2")));
-        assertTrue(results.stream().anyMatch(r -> r.entry().id().equals("test3")));
+        assertFalse(results.stream().anyMatch(r -> r.entry().id().equals(1L)));
+        assertTrue(results.stream().anyMatch(r -> r.entry().id().equals(2L)));
+        assertTrue(results.stream().anyMatch(r -> r.entry().id().equals(3L)));
     }
 
     @Test
@@ -429,16 +429,16 @@ class HnswVectorIndexTest {
 
     @Test
     void testMultipleDatabasesIsolation() {
-        // Add vectors to first database
-        VectorEntry vector1 = createTestVector("db1-vec1", new float[]{1.0f, 0.0f, 0.0f});
-        VectorEntry vector2 = createTestVector("db1-vec2", new float[]{0.0f, 1.0f, 0.0f});
+        // Add vectors to first database - use IDs 1000-1999 for db1
+        VectorEntry vector1 = createTestVector(1001L, new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector2 = createTestVector(1002L, new float[]{0.0f, 1.0f, 0.0f});
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
         hnswIndex.build(TEST_DB_ID);
 
-        // Add vectors to second database
-        VectorEntry vector3 = createTestVector("db2-vec1", new float[]{0.5f, 0.5f, 0.0f});
-        VectorEntry vector4 = createTestVector("db2-vec2", new float[]{0.3f, 0.7f, 0.0f});
+        // Add vectors to second database - use IDs 2000-2999 for db2
+        VectorEntry vector3 = createTestVector(2001L, new float[]{0.5f, 0.5f, 0.0f});
+        VectorEntry vector4 = createTestVector(2002L, new float[]{0.3f, 0.7f, 0.0f});
         hnswIndex.add(vector3, TEST_DB_ID_2);
         hnswIndex.add(vector4, TEST_DB_ID_2);
         hnswIndex.build(TEST_DB_ID_2);
@@ -452,21 +452,20 @@ class HnswVectorIndexTest {
         List<SearchResult> resultsDb1 = hnswIndex.search(queryVector, 10, TEST_DB_ID);
 
         assertEquals(2, resultsDb1.size());
-        assertTrue(resultsDb1.stream().allMatch(r -> r.entry().id().startsWith("db1-")));
-        assertFalse(resultsDb1.stream().anyMatch(r -> r.entry().id().startsWith("db2-")));
-
+        assertTrue(resultsDb1.stream().allMatch(r -> r.entry().id() >= 1000L && r.entry().id() < 2000L));
+        assertFalse(resultsDb1.stream().anyMatch(r -> r.entry().id() >= 2000L));
         // Search in second database should only return vectors from second database
         List<SearchResult> resultsDb2 = hnswIndex.search(queryVector, 10, TEST_DB_ID_2);
 
         assertEquals(2, resultsDb2.size());
-        assertTrue(resultsDb2.stream().allMatch(r -> r.entry().id().startsWith("db2-")));
-        assertFalse(resultsDb2.stream().anyMatch(r -> r.entry().id().startsWith("db1-")));
+        assertTrue(resultsDb2.stream().allMatch(r -> r.entry().id() >= 2000L && r.entry().id() < 3000L));
+        assertFalse(resultsDb2.stream().anyMatch(r -> r.entry().id() >= 1000L && r.entry().id() < 2000L));
     }
 
     @Test
     void testClearAllDatabases() {
         // Add vectors to multiple databases
-        VectorEntry vector1 = createTestVector("vec1", new float[]{1.0f, 0.0f, 0.0f});
+        VectorEntry vector1 = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.build(TEST_DB_ID);
 

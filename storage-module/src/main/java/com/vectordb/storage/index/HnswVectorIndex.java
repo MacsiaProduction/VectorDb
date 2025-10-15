@@ -45,13 +45,13 @@ public class HnswVectorIndex implements VectorIndex {
         List<VectorEntry> vectorBuffer = new ArrayList<>();
         
         /** HNSW индекс для быстрого поиска */
-        HnswIndex<String, float[], VectorEntry, Float> hnswIndex;
+        HnswIndex<Long, float[], VectorEntry, Float> hnswIndex;
         
         /** Маппинг ID → VectorEntry */
-        Map<String, VectorEntry> idToEntry = new HashMap<>();
+        Map<Long, VectorEntry> idToEntry = new HashMap<>();
         
         /** Удалённые ID (мягкое удаление) */
-        Set<String> deletedIds = new HashSet<>();
+        Set<Long> deletedIds = new HashSet<>();
     }
     
     private final Map<String, DatabaseIndex> databaseIndices = new ConcurrentHashMap<>();
@@ -191,7 +191,7 @@ public class HnswVectorIndex implements VectorIndex {
     }
     
     @Override
-    public boolean remove(String vectorId, String databaseId) {
+    public boolean remove(Long vectorId, String databaseId) {
         lock.writeLock().lock();
         try {
             DatabaseIndex dbIndex = databaseIndices.get(databaseId);
@@ -246,7 +246,7 @@ public class HnswVectorIndex implements VectorIndex {
             log.debug("Performing HNSW search for k={} on {} indexed vectors in database {} using pure Java hnswlib", 
                     k, dbIndex.hnswIndex.size(), databaseId);
 
-            String tempQueryId = "__query_" + System.nanoTime() + "__";
+            Long tempQueryId = Long.MIN_VALUE + System.nanoTime();
             VectorEntry queryItem = new VectorEntry(
                 tempQueryId,                                      // id
                 queryVector,                                      // embedding
@@ -264,7 +264,7 @@ public class HnswVectorIndex implements VectorIndex {
                 List<com.vectordb.common.model.SearchResult> results = new ArrayList<>();
                 for (SearchResult<VectorEntry, Float> hnswResult : allResults) {
                     VectorEntry item = hnswResult.item();
-                    String itemId = item.id();
+                    Long itemId = item.id();
                     
                     if (itemId.equals(tempQueryId)) {
                         continue;
@@ -357,7 +357,7 @@ public class HnswVectorIndex implements VectorIndex {
                  ObjectInputStream in = new ObjectInputStream(fis)) {
                 
                 @SuppressWarnings("unchecked")
-                Map<String, VectorEntry> loadedIdToEntry = (Map<String, VectorEntry>) in.readObject();
+                Map<Long, VectorEntry> loadedIdToEntry = (Map<Long, VectorEntry>) in.readObject();
                 dbIndex.idToEntry.clear();
                 dbIndex.idToEntry.putAll(loadedIdToEntry);
                 
@@ -366,7 +366,7 @@ public class HnswVectorIndex implements VectorIndex {
                 String loadedSpaceType = (String) in.readObject();
                 
                 @SuppressWarnings("unchecked")
-                Set<String> loadedDeletedIds = (Set<String>) in.readObject();
+                Set<Long> loadedDeletedIds = (Set<Long>) in.readObject();
                 dbIndex.deletedIds.clear();
                 dbIndex.deletedIds.addAll(loadedDeletedIds);
                 

@@ -23,21 +23,21 @@ public class StorageController {
     private final VectorStorageService storageService;
     
     @PostMapping("/vectors/{databaseId}")
-    public ResponseEntity<String> addVector(
+    public ResponseEntity<Long> addVector(
             @PathVariable String databaseId,
             @Valid @RequestBody VectorEntry entry) {
         try {
-            String id = storageService.add(entry, databaseId);
+            Long id = storageService.add(entry, databaseId);
             return ResponseEntity.status(HttpStatus.CREATED).body(id);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Failed to add vector: " + e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
     }
     
     @GetMapping("/vectors/{databaseId}/{id}")
     public ResponseEntity<VectorEntry> getVector(
             @PathVariable String databaseId,
-            @PathVariable String id) {
+            @PathVariable Long id) {
         return storageService.get(id, databaseId)
                            .map(ResponseEntity::ok)
                            .orElse(ResponseEntity.notFound().build());
@@ -46,9 +46,9 @@ public class StorageController {
     @DeleteMapping("/vectors/{databaseId}/{id}")
     public ResponseEntity<Void> deleteVector(
             @PathVariable String databaseId,
-            @PathVariable String id) {
+            @PathVariable Long id) {
         boolean deleted = storageService.delete(id, databaseId);
-        return deleted ? ResponseEntity.noContent().build() 
+        return deleted ? ResponseEntity.noContent().build()
                        : ResponseEntity.notFound().build();
     }
     

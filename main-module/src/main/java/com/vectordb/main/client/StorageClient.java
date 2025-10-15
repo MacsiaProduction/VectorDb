@@ -22,7 +22,7 @@ public class StorageClient {
     
     private final WebClient storageWebClient;
     
-    public Mono<String> addVector(VectorEntry entry, String databaseId) {
+    public Mono<Long> addVector(VectorEntry entry, String databaseId) {
         log.debug("Adding vector to database {} via storage service", databaseId);
         
         return storageWebClient
@@ -30,12 +30,12 @@ public class StorageClient {
                 .uri(STORAGE_API_BASE_PATH + "/vectors/{databaseId}", databaseId)
                 .bodyValue(entry)
                 .retrieve()
-                .bodyToMono(String.class)
+                .bodyToMono(Long.class)
                 .doOnSuccess(id -> log.debug("Vector added with ID: {}", id))
                 .doOnError(error -> log.error("Failed to add vector to database {}: {}", databaseId, error.getMessage()));
     }
     
-    public Mono<VectorEntry> getVector(String id, String databaseId) {
+    public Mono<VectorEntry> getVector(Long id, String databaseId) {
         log.debug("Getting vector {} from database {} via storage service", id, databaseId);
         
         return storageWebClient
@@ -47,7 +47,7 @@ public class StorageClient {
                         _ -> log.debug("Vector {} not found in database {}", id, databaseId));
     }
     
-    public Mono<Boolean> deleteVector(String id, String databaseId) {
+    public Mono<Boolean> deleteVector(Long id, String databaseId) {
         log.debug("Deleting vector {} from database {} via storage service", id, databaseId);
         
         return storageWebClient

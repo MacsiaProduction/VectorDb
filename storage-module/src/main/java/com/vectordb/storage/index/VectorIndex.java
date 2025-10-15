@@ -31,7 +31,7 @@ public interface VectorIndex {
      * @param databaseId ID базы данных
      * @return true если вектор найден и удалён
      */
-    boolean remove(String vectorId, String databaseId);
+    boolean remove(Long vectorId, String databaseId);
     
     /**
      * Поиск k ближайших соседей

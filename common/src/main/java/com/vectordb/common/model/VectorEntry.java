@@ -18,7 +18,7 @@ import java.time.Instant;
 @Builder
 public record VectorEntry(
     @JsonProperty("id")
-    String id,
+    Long id,
     
     @NotNull
     @Size(min = 1)
@@ -33,7 +33,7 @@ public record VectorEntry(
     
     @JsonProperty("createdAt")
     Instant createdAt
-) implements Serializable, Item<String, float[]> {
+) implements Serializable, Item<Long, float[]> {
     @JsonCreator
     public VectorEntry {
         if (embedding == null || embedding.length == 0) {
@@ -44,7 +44,7 @@ public record VectorEntry(
     /**
      * Creates a new VectorEntry with generated ID for storage
      */
-    public VectorEntry withId(String newId) {
+    public VectorEntry withId(Long newId) {
         return new VectorEntry(newId, embedding, originalData, databaseId, createdAt);
     }
     

@@ -41,7 +41,7 @@ public class VectorService {
      * @param dbId database identifier
      * @return generated ID for the added vector
      */
-    public String add(float[] vector, String data, String dbId) throws VectorRepositoryException {
+    public Long add(float[] vector, String data, String dbId) throws VectorRepositoryException {
         log.debug("Adding vector to database {} with data: {}", dbId, data);
         
         Instant now = Instant.now();
@@ -52,7 +52,7 @@ public class VectorService {
             dbId,           // databaseId
             now             // createdAt
         );
-        String id = vectorRepository.add(vectorEntry, dbId);
+        Long id = vectorRepository.add(vectorEntry, dbId);
         
         log.debug("Vector added with ID: {}", id);
         return id;
@@ -64,7 +64,7 @@ public class VectorService {
      * @param dbId database identifier
      * @return true if vector was deleted, false otherwise
      */
-    public boolean delete(String id, String dbId) throws VectorRepositoryException {
+    public boolean delete(Long id, String dbId) throws VectorRepositoryException {
         log.debug("Deleting vector {} from database {}", id, dbId);
         return vectorRepository.deleteById(id, dbId);
     }

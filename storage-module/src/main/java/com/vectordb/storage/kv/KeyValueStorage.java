@@ -15,10 +15,10 @@ public interface KeyValueStorage {
     void putVector(String databaseId, VectorEntry entry) throws Exception;
     
     /** Получить вектор по ID */
-    Optional<VectorEntry> getVector(String databaseId, String id) throws Exception;
+    Optional<VectorEntry> getVector(String databaseId, Long id) throws Exception;
     
     /** Удалить вектор */
-    boolean deleteVector(String databaseId, String id) throws Exception;
+    boolean deleteVector(String databaseId, Long id) throws Exception;
     
     /** Получить все векторы БД */
     List<VectorEntry> getAllVectors(String databaseId) throws Exception;

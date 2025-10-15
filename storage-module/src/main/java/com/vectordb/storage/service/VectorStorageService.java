@@ -12,13 +12,13 @@ import java.util.Optional;
 public interface VectorStorageService {
     
     /** Добавить вектор в хранилище */
-    String add(VectorEntry entry, String databaseId);
+    Long add(VectorEntry entry, String databaseId);
     
     /** Получить вектор по ID */
-    Optional<VectorEntry> get(String id, String databaseId);
+    Optional<VectorEntry> get(Long id, String databaseId);
     
     /** Удалить вектор по ID */
-    boolean delete(String id, String databaseId);
+    boolean delete(Long id, String databaseId);
     
     /** Поиск похожих векторов (KNN) */
     List<SearchResult> search(SearchQuery query);
