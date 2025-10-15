@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 public class GetTopKRequest {
     
     @Schema(description = "Query vector coordinates for similarity search", example = "[1.0, 2.0, 3.0]")
-    private double[] vector;
+    private float[] vector;
     
     @Schema(description = "Number of top similar vectors to return", example = "10")
     private int k;

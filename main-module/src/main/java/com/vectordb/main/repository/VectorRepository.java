@@ -20,7 +20,7 @@ public interface VectorRepository {
      * @return list of similar vectors
      * @throws VectorRepositoryException if search fails
      */
-    List<VectorEntry> getTopKSimilar(double[] vector, int k, String dbId) throws VectorRepositoryException;
+    List<VectorEntry> getTopKSimilar(float[] vector, int k, String dbId) throws VectorRepositoryException;
     
     /**
      * Save a vector entry to the specified database

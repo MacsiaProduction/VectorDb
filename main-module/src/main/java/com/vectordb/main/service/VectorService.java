@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -28,7 +29,7 @@ public class VectorService {
      * @param dbId database identifier
      * @return list of similar vectors
      */
-    public List<VectorEntry> getTopK(double[] vector, int k, String dbId) throws VectorRepositoryException {
+    public List<VectorEntry> getTopK(float[] vector, int k, String dbId) throws VectorRepositoryException {
         log.debug("Searching for top {} similar vectors in database {}", k, dbId);
         return vectorRepository.getTopKSimilar(vector, k, dbId);
     }
@@ -40,10 +41,17 @@ public class VectorService {
      * @param dbId database identifier
      * @return generated ID for the added vector
      */
-    public String add(double[] vector, String data, String dbId) throws VectorRepositoryException {
+    public String add(float[] vector, String data, String dbId) throws VectorRepositoryException {
         log.debug("Adding vector to database {} with data: {}", dbId, data);
         
-        VectorEntry vectorEntry = new VectorEntry(null, vector, data, null);
+        Instant now = Instant.now();
+        VectorEntry vectorEntry = new VectorEntry(
+            null,           // id - will be generated
+            vector,         // embedding
+            data,           // originalData
+            dbId,           // databaseId
+            now             // createdAt
+        );
         String id = vectorRepository.add(vectorEntry, dbId);
         
         log.debug("Vector added with ID: {}", id);

@@ -24,7 +24,7 @@ public class StorageVectorRepository implements VectorRepository {
     private final StorageClient storageClient;
     
     @Override
-    public List<VectorEntry> getTopKSimilar(double[] vector, int k, String dbId) throws VectorRepositoryException {
+    public List<VectorEntry> getTopKSimilar(float[] vector, int k, String dbId) throws VectorRepositoryException {
         log.debug("Getting top {} similar vectors in database {} via storage", k, dbId);
         
         SearchQuery query = SearchQuery.simple(vector, k, dbId);

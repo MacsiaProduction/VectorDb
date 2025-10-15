@@ -45,7 +45,7 @@ public class HnswVectorIndex implements VectorIndex {
         List<VectorEntry> vectorBuffer = new ArrayList<>();
         
         /** HNSW индекс для быстрого поиска */
-        HnswIndex<String, float[], VectorItem, Float> hnswIndex;
+        HnswIndex<String, float[], VectorEntry, Float> hnswIndex;
         
         /** Маппинг ID → VectorEntry */
         Map<String, VectorEntry> idToEntry = new HashMap<>();
@@ -56,7 +56,7 @@ public class HnswVectorIndex implements VectorIndex {
     
     private final Map<String, DatabaseIndex> databaseIndices = new ConcurrentHashMap<>();
     private int defaultDimension = -1;
-    
+
     public HnswVectorIndex(
             VectorSimilarity vectorSimilarity,
             @Value("${vector.index.maxElements:10000}") int maxElements,
@@ -95,22 +95,23 @@ public class HnswVectorIndex implements VectorIndex {
             if (dbIndex.dimension == -1) {
                 throw new IllegalStateException("Dimension must be set before building index for database " + databaseId);
             }
-            
+
             if (dbIndex.vectorBuffer.isEmpty()) {
                 // Create empty index
                 DistanceFunction<float[], Float> distanceFunction = createDistanceFunction();
-                
+
                 dbIndex.hnswIndex = HnswIndex.newBuilder(dbIndex.dimension, distanceFunction, maxElements)
                     .withM(m)
                     .withEfConstruction(efConstruction)
                     .withEf(efSearch)
                     .build();
-                
+
                 dbIndex.isBuilt = true;
                 log.info("Built empty HNSW index for database {} with dimension={}", databaseId, dbIndex.dimension);
+                dbIndex.isBuilt = true;
                 return;
             }
-            
+
             log.info("Building HNSW index for database {} with {} vectors, dimension={}", 
                     databaseId, dbIndex.vectorBuffer.size(), dbIndex.dimension);
             
@@ -122,10 +123,9 @@ public class HnswVectorIndex implements VectorIndex {
                 .withEf(efSearch)
                 .build();
             
-            List<VectorItem> items = new ArrayList<>();
+            List<VectorEntry> items = new ArrayList<>();
             for (VectorEntry entry : dbIndex.vectorBuffer) {
-                VectorItem item = VectorItem.fromVectorEntry(entry);
-                items.add(item);
+                items.add(entry);
                 dbIndex.idToEntry.put(entry.id(), entry);
             }
             
@@ -163,7 +163,7 @@ public class HnswVectorIndex implements VectorIndex {
                 return;
             }
             
-            if (dbIndex.hnswIndex.size() == 0 && dbIndex.idToEntry.isEmpty()) {
+            if (dbIndex.hnswIndex == null || (dbIndex.hnswIndex.size() == 0 && dbIndex.idToEntry.isEmpty())) {
                 dbIndex.dimension = vector.dimension();
                 
                 DistanceFunction<float[], Float> distanceFunction = createDistanceFunction();
@@ -181,8 +181,7 @@ public class HnswVectorIndex implements VectorIndex {
                         databaseId, dbIndex.dimension, vector.dimension()));
             }
             
-            VectorItem item = VectorItem.fromVectorEntry(vector);
-            dbIndex.hnswIndex.add(item);
+            dbIndex.hnswIndex.add(vector);
             dbIndex.idToEntry.put(vector.id(), vector);
             log.debug("Added vector {} to built index for database {} using pure Java hnswlib", vector.id(), databaseId);
             
@@ -223,7 +222,7 @@ public class HnswVectorIndex implements VectorIndex {
     }
     
     @Override
-    public List<com.vectordb.common.model.SearchResult> search(double[] queryVector, int k, String databaseId) {
+    public List<com.vectordb.common.model.SearchResult> search(float[] queryVector, int k, String databaseId) {
         lock.readLock().lock();
         try {
             DatabaseIndex dbIndex = databaseIndices.get(databaseId);
@@ -246,21 +245,25 @@ public class HnswVectorIndex implements VectorIndex {
             
             log.debug("Performing HNSW search for k={} on {} indexed vectors in database {} using pure Java hnswlib", 
                     k, dbIndex.hnswIndex.size(), databaseId);
-            
-            float[] queryVectorFloat = doubleArrayToFloat(queryVector);
-            
+
             String tempQueryId = "__query_" + System.nanoTime() + "__";
-            VectorItem queryItem = new VectorItem(tempQueryId, queryVectorFloat, null);
+            VectorEntry queryItem = new VectorEntry(
+                tempQueryId,                                      // id
+                queryVector,                                      // embedding
+                null,                                             // originalData
+                databaseId,                                       // databaseId
+                null                                              // createdAt
+            );
             
             dbIndex.hnswIndex.add(queryItem);
             
             try {
                 int searchK = Math.min(k * 2 + 10, dbIndex.hnswIndex.size());
-                List<SearchResult<VectorItem, Float>> allResults = dbIndex.hnswIndex.findNeighbors(tempQueryId, searchK);
+                List<SearchResult<VectorEntry, Float>> allResults = dbIndex.hnswIndex.findNeighbors(tempQueryId, searchK);
                 
                 List<com.vectordb.common.model.SearchResult> results = new ArrayList<>();
-                for (SearchResult<VectorItem, Float> hnswResult : allResults) {
-                    VectorItem item = hnswResult.item();
+                for (SearchResult<VectorEntry, Float> hnswResult : allResults) {
+                    VectorEntry item = hnswResult.item();
                     String itemId = item.id();
                     
                     if (itemId.equals(tempQueryId)) {
@@ -273,7 +276,7 @@ public class HnswVectorIndex implements VectorIndex {
                     
                     VectorEntry entry = dbIndex.idToEntry.get(itemId);
                     if (entry == null) {
-                        entry = item.getEntry();
+                        entry = item;
                     }
                     if (entry == null) {
                         log.warn("No entry found for vector ID: {} in database {}", itemId, databaseId);
@@ -466,7 +469,7 @@ public class HnswVectorIndex implements VectorIndex {
             lock.writeLock().unlock();
         }
     }
-    
+
     /**
      * Создание функции расстояния на основе типа пространства
      */
@@ -481,18 +484,7 @@ public class HnswVectorIndex implements VectorIndex {
             }
         };
     }
-    
-    /**
-     * Конвертация массива double в массив float для совместимости с hnswlib
-     */
-    private float[] doubleArrayToFloat(double[] doubleArray) {
-        float[] floatArray = new float[doubleArray.length];
-        for (int i = 0; i < doubleArray.length; i++) {
-            floatArray[i] = (float) doubleArray[i];
-        }
-        return floatArray;
-    }
-    
+
     /**
      * Конвертация расстояния в оценку сходства (выше - лучше)
      */
@@ -507,19 +499,19 @@ public class HnswVectorIndex implements VectorIndex {
     /**
      * Линейный поиск по коллекции векторов (резервный метод)
      */
-    private List<com.vectordb.common.model.SearchResult> linearSearch(double[] queryVector, int k, List<VectorEntry> vectors, String databaseId) {
+    private List<com.vectordb.common.model.SearchResult> linearSearch(float[] queryVector, int k, List<VectorEntry> vectors, String databaseId) {
         DatabaseIndex dbIndex = databaseIndices.get(databaseId);
         if (dbIndex == null) {
             return List.of();
         }
-        
+
         // Validate query vector dimension
         if (dbIndex.dimension > 0 && queryVector.length != dbIndex.dimension) {
             throw new IllegalArgumentException(
                 String.format("Query vector dimension mismatch for database %s. Expected: %d, got: %d",
                     databaseId, dbIndex.dimension, queryVector.length));
         }
-        
+
         List<com.vectordb.common.model.SearchResult> results = new ArrayList<>();
         
         for (VectorEntry vector : vectors) {
@@ -527,7 +519,7 @@ public class HnswVectorIndex implements VectorIndex {
                 continue;
             }
             
-            double distance = calculateDistance(queryVector, vector.embedding());
+            float distance = calculateDistance(queryVector, vector.embedding());
             double similarity = distanceToSimilarity(distance);
             results.add(new com.vectordb.common.model.SearchResult(vector, distance, similarity));
         }
@@ -542,15 +534,24 @@ public class HnswVectorIndex implements VectorIndex {
     /**
      * Вычисление расстояния между двумя векторами с использованием VectorSimilarity
      */
-    private double calculateDistance(double[] a, double[] b) {
-        return switch (spaceType.toLowerCase()) {
-            case "cosine" -> 1.0 - vectorSimilarity.cosineSimilarity(a, b);
-            case "euclidean", "l2" -> vectorSimilarity.euclideanDistance(a, b);
-            case "manhattan", "l1" -> vectorSimilarity.manhattanDistance(a, b);
+    private float calculateDistance(float[] a, float[] b) {
+        // Convert to double for calculation, then back to float
+        double[] aDouble = new double[a.length];
+        double[] bDouble = new double[b.length];
+        for (int i = 0; i < a.length; i++) {
+            aDouble[i] = a[i];
+            bDouble[i] = b[i];
+        }
+
+        double distance = switch (spaceType.toLowerCase()) {
+            case "cosine" -> 1.0 - vectorSimilarity.cosineSimilarity(aDouble, bDouble);
+            case "euclidean", "l2" -> vectorSimilarity.euclideanDistance(aDouble, bDouble);
+            case "manhattan", "l1" -> vectorSimilarity.manhattanDistance(aDouble, bDouble);
             default -> {
                 log.warn("Unknown space type: {}, defaulting to cosine", spaceType);
-                yield 1.0 - vectorSimilarity.cosineSimilarity(a, b);
+                yield 1.0 - vectorSimilarity.cosineSimilarity(aDouble, bDouble);
             }
         };
+        return (float) distance;
     }
 }

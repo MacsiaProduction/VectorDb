@@ -8,6 +8,9 @@ dependencies {
     api 'jakarta.validation:jakarta.validation-api:3.1.0'
     api 'io.swagger.core.v3:swagger-annotations:2.2.22'
     
+    // For HNSW vector indexing - VectorEntry implements Item interface
+    api 'com.github.jelmerk:hnswlib-core:1.2.0'
+    
     // Test dependencies for common module
     testImplementation 'org.springframework:spring-test:6.1.13'
 }
