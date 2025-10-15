@@ -13,6 +13,7 @@ dependencies {
     
     // Test dependencies for common module
     testImplementation 'org.springframework:spring-test:6.1.13'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 // Common module produces a regular JAR, not a Spring Boot fat JAR

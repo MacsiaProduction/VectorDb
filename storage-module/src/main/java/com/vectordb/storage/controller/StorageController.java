@@ -4,12 +4,14 @@ import com.vectordb.common.model.VectorEntry;
 import com.vectordb.common.model.SearchQuery;
 import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.DatabaseInfo;
+import com.vectordb.common.serialization.SearchResultSerializer;
 import com.vectordb.storage.service.VectorStorageService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +23,7 @@ import java.util.List;
 public class StorageController {
     
     private final VectorStorageService storageService;
+    private final SearchResultSerializer searchResultSerializer;
     
     @PostMapping("/vectors/{databaseId}")
     public ResponseEntity<Long> addVector(
@@ -52,10 +55,20 @@ public class StorageController {
                        : ResponseEntity.notFound().build();
     }
     
-    @PostMapping("/search")
-    public ResponseEntity<List<SearchResult>> searchVectors(@Valid @RequestBody SearchQuery query) {
+    @PostMapping(value = "/search", produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_OCTET_STREAM_VALUE})
+    public ResponseEntity<?> searchVectors(
+            @Valid @RequestBody SearchQuery query,
+            @RequestHeader(value = "Accept", defaultValue = MediaType.APPLICATION_JSON_VALUE) String acceptHeader) {
         try {
             List<SearchResult> results = storageService.search(query);
+            
+            if (acceptHeader.contains(MediaType.APPLICATION_OCTET_STREAM_VALUE)) {
+                byte[] serialized = searchResultSerializer.serialize(results);
+                return ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .body(serialized);
+            }
+            
             return ResponseEntity.ok(results);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
