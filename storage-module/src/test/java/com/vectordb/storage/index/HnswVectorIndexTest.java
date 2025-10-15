@@ -21,7 +21,7 @@ class HnswVectorIndexTest {
     private VectorSimilarity vectorSimilarity;
     private static final String TEST_DB_ID = "test-db";
     private static final String TEST_DB_ID_2 = "test-db-2";
-    
+
     @TempDir
     Path tempDir;
     
@@ -206,14 +206,14 @@ class HnswVectorIndexTest {
         double[] wrongDimensionQuery = {1.0, 0.0};
         assertThrows(IllegalArgumentException.class, () -> hnswIndex.search(wrongDimensionQuery, 1, TEST_DB_ID));
     }
-    
+
     @Test
     void testSearchDimensionMismatchOnUnbuiltIndex() {
         VectorEntry vector = VectorEntry.builder()
             .id("test1")
             .embedding(new double[]{1.0, 0.0, 0.0})
             .build();
-        
+
         hnswIndex.add(vector, TEST_DB_ID);
         double[] wrongDimensionQuery = {1.0, 0.0};
         assertThrows(IllegalArgumentException.class, () -> hnswIndex.search(wrongDimensionQuery, 1, TEST_DB_ID));
@@ -457,42 +457,42 @@ class HnswVectorIndexTest {
         assertTrue(results.stream().anyMatch(r -> r.entry().id().equals("test2")));
         assertTrue(results.stream().anyMatch(r -> r.entry().id().equals("test3")));
     }
-    
+
     @Test
     void testAddVectorWithoutSettingDimension() {
         // Create new index without setting dimension
         HnswVectorIndex newIndex = new HnswVectorIndex(
             vectorSimilarity, 1000, 16, 200, 100, "cosine"
         );
-        
+
         VectorEntry vector = VectorEntry.builder()
             .id("test1")
             .embedding(new double[]{1.0, 0.0, 0.0})
             .build();
-        
+
         // Should throw exception when trying to add vector without setting dimension
         assertThrows(IllegalStateException.class, () -> newIndex.add(vector, TEST_DB_ID));
     }
-    
+
     @Test
     void testBuildIndexWithoutSettingDimension() {
         // Create new index without setting dimension
         HnswVectorIndex newIndex = new HnswVectorIndex(
             vectorSimilarity, 1000, 16, 200, 100, "cosine"
         );
-        
+
         // Should throw exception when trying to build index without setting dimension
         assertThrows(RuntimeException.class, () -> newIndex.build(TEST_DB_ID));
     }
-    
+
     @Test
     void testSetDimensionAfterBuilding() {
         hnswIndex.build(TEST_DB_ID);
-        
+
         // Should throw exception when trying to set dimension after building
         assertThrows(IllegalStateException.class, () -> hnswIndex.setDimension(5));
     }
-    
+
     @Test
     void testSetInvalidDimension() {
         // Should throw exception for invalid dimension
@@ -504,74 +504,74 @@ class HnswVectorIndexTest {
     void testMultipleDatabasesIsolation() {
         // Add vectors to first database
         VectorEntry vector1 = VectorEntry.builder()
-            .id("db1-vec1")
-            .embedding(new double[]{1.0, 0.0, 0.0})
-            .build();
-        
+                .id("db1-vec1")
+                .embedding(new double[]{1.0, 0.0, 0.0})
+                .build();
+
         VectorEntry vector2 = VectorEntry.builder()
-            .id("db1-vec2")
-            .embedding(new double[]{0.0, 1.0, 0.0})
-            .build();
-        
+                .id("db1-vec2")
+                .embedding(new double[]{0.0, 1.0, 0.0})
+                .build();
+
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.add(vector2, TEST_DB_ID);
         hnswIndex.build(TEST_DB_ID);
-        
+
         // Add vectors to second database
         VectorEntry vector3 = VectorEntry.builder()
-            .id("db2-vec1")
-            .embedding(new double[]{0.5, 0.5, 0.0})
-            .build();
-        
+                .id("db2-vec1")
+                .embedding(new double[]{0.5, 0.5, 0.0})
+                .build();
+
         VectorEntry vector4 = VectorEntry.builder()
-            .id("db2-vec2")
-            .embedding(new double[]{0.3, 0.7, 0.0})
-            .build();
-        
+                .id("db2-vec2")
+                .embedding(new double[]{0.3, 0.7, 0.0})
+                .build();
+
         hnswIndex.add(vector3, TEST_DB_ID_2);
         hnswIndex.add(vector4, TEST_DB_ID_2);
         hnswIndex.build(TEST_DB_ID_2);
-        
+
         // Verify sizes
         assertEquals(2, hnswIndex.size(TEST_DB_ID));
         assertEquals(2, hnswIndex.size(TEST_DB_ID_2));
-        
+
         // Search in first database should only return vectors from first database
         double[] queryVector = {1.0, 0.0, 0.0};
         List<SearchResult> resultsDb1 = hnswIndex.search(queryVector, 10, TEST_DB_ID);
-        
+
         assertEquals(2, resultsDb1.size());
         assertTrue(resultsDb1.stream().allMatch(r -> r.entry().id().startsWith("db1-")));
         assertFalse(resultsDb1.stream().anyMatch(r -> r.entry().id().startsWith("db2-")));
-        
+
         // Search in second database should only return vectors from second database
         List<SearchResult> resultsDb2 = hnswIndex.search(queryVector, 10, TEST_DB_ID_2);
-        
+
         assertEquals(2, resultsDb2.size());
         assertTrue(resultsDb2.stream().allMatch(r -> r.entry().id().startsWith("db2-")));
         assertFalse(resultsDb2.stream().anyMatch(r -> r.entry().id().startsWith("db1-")));
     }
-    
+
     @Test
     void testClearAllDatabases() {
         // Add vectors to multiple databases
         VectorEntry vector1 = VectorEntry.builder()
-            .id("vec1")
-            .embedding(new double[]{1.0, 0.0, 0.0})
-            .build();
-        
+                .id("vec1")
+                .embedding(new double[]{1.0, 0.0, 0.0})
+                .build();
+
         hnswIndex.add(vector1, TEST_DB_ID);
         hnswIndex.build(TEST_DB_ID);
-        
+
         hnswIndex.add(vector1, TEST_DB_ID_2);
         hnswIndex.build(TEST_DB_ID_2);
-        
+
         assertEquals(1, hnswIndex.size(TEST_DB_ID));
         assertEquals(1, hnswIndex.size(TEST_DB_ID_2));
-        
+
         // Clear all
         hnswIndex.clearAll();
-        
+
         assertEquals(0, hnswIndex.size(TEST_DB_ID));
         assertEquals(0, hnswIndex.size(TEST_DB_ID_2));
         assertFalse(hnswIndex.isBuilt(TEST_DB_ID));
