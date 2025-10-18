@@ -4,8 +4,10 @@ import com.vectordb.common.model.DatabaseInfo;
 import com.vectordb.common.model.SearchQuery;
 import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.VectorEntry;
+import com.vectordb.common.serialization.SearchResultDeserializer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -21,8 +23,9 @@ public class StorageClient {
     private static final String STORAGE_API_BASE_PATH = "/api/v1/storage";
     
     private final WebClient storageWebClient;
+    private final SearchResultDeserializer searchResultDeserializer;
     
-    public Mono<String> addVector(VectorEntry entry, String databaseId) {
+    public Mono<Long> addVector(VectorEntry entry, String databaseId) {
         log.debug("Adding vector to database {} via storage service", databaseId);
         
         return storageWebClient
@@ -30,12 +33,12 @@ public class StorageClient {
                 .uri(STORAGE_API_BASE_PATH + "/vectors/{databaseId}", databaseId)
                 .bodyValue(entry)
                 .retrieve()
-                .bodyToMono(String.class)
+                .bodyToMono(Long.class)
                 .doOnSuccess(id -> log.debug("Vector added with ID: {}", id))
                 .doOnError(error -> log.error("Failed to add vector to database {}: {}", databaseId, error.getMessage()));
     }
     
-    public Mono<VectorEntry> getVector(String id, String databaseId) {
+    public Mono<VectorEntry> getVector(Long id, String databaseId) {
         log.debug("Getting vector {} from database {} via storage service", id, databaseId);
         
         return storageWebClient
@@ -47,7 +50,7 @@ public class StorageClient {
                         _ -> log.debug("Vector {} not found in database {}", id, databaseId));
     }
     
-    public Mono<Boolean> deleteVector(String id, String databaseId) {
+    public Mono<Boolean> deleteVector(Long id, String databaseId) {
         log.debug("Deleting vector {} from database {} via storage service", id, databaseId);
         
         return storageWebClient
@@ -60,16 +63,25 @@ public class StorageClient {
     }
     
     public Mono<List<SearchResult>> searchVectors(SearchQuery query) {
-        log.debug("Searching vectors via storage service");
+        log.debug("Searching vectors via storage service (binary format)");
         
         return storageWebClient
                 .post()
                 .uri(STORAGE_API_BASE_PATH + "/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_OCTET_STREAM)
                 .bodyValue(query)
                 .retrieve()
-                .bodyToFlux(SearchResult.class)
-                .collectList()
-                .doOnSuccess(results -> log.debug("Found {} search results", results.size()))
+                .bodyToMono(byte[].class)
+                .map(bytes -> {
+                    try {
+                        return searchResultDeserializer.deserialize(bytes);
+                    } catch (Exception e) {
+                        log.error("Failed to deserialize search results: {}", e.getMessage());
+                        throw new RuntimeException("Failed to deserialize search results", e);
+                    }
+                })
+                .doOnSuccess(results -> log.debug("Deserialized {} search results from binary", results.size()))
                 .doOnError(error -> log.error("Failed to search vectors: {}", error.getMessage()));
     }
     

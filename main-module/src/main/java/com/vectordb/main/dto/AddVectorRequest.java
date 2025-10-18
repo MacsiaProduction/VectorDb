@@ -11,8 +11,8 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request for adding a vector to database")
 public class AddVectorRequest {
     
-    @Schema(description = "Vector coordinates as array of doubles", example = "[1.0, 2.0, 3.0]")
-    private double[] vector;
+    @Schema(description = "Vector coordinates as array of floats", example = "[1.0, 2.0, 3.0]")
+    private float[] vector;
     
     @Schema(description = "String data associated with the vector", example = "Hello World")
     private String data;

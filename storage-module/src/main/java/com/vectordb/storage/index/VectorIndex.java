@@ -31,7 +31,7 @@ public interface VectorIndex {
      * @param databaseId ID базы данных
      * @return true если вектор найден и удалён
      */
-    boolean remove(String vectorId, String databaseId);
+    boolean remove(Long vectorId, String databaseId);
     
     /**
      * Поиск k ближайших соседей
@@ -40,7 +40,7 @@ public interface VectorIndex {
      * @param databaseId ID базы данных
      * @return список результатов, отсортированных по расстоянию
      */
-    List<SearchResult> search(double[] queryVector, int k, String databaseId);
+    List<SearchResult> search(float[] queryVector, int k, String databaseId);
     
     /**
      * Сохранить индекс в файл

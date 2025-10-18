@@ -12,7 +12,7 @@ public record SearchQuery(
     @NotNull
     @Size(min = 1)
     @JsonProperty("embedding")
-    double[] embedding,
+    float[] embedding,
     
     @Min(1)
     @JsonProperty("k")
@@ -29,32 +29,22 @@ public record SearchQuery(
         if (embedding == null || embedding.length == 0) {
             throw new IllegalArgumentException("Embedding cannot be null or empty");
         }
-        if (k <= 0) {
-            throw new IllegalArgumentException("K must be positive");
-        }
         if (threshold != null && (threshold < 0 || threshold > 1)) {
             throw new IllegalArgumentException("Threshold must be between 0 and 1");
         }
     }
-    
-    /**
-     * Gets the dimension of the query embedding
-     */
-    public int dimension() {
-        return embedding.length;
-    }
-    
+
     /**
      * Creates a simple search query
      */
-    public static SearchQuery simple(double[] embedding, int k, String databaseId) {
+    public static SearchQuery simple(float[] embedding, int k, String databaseId) {
         return new SearchQuery(embedding, k, databaseId, null);
     }
     
     /**
      * Creates a search query with similarity threshold
      */
-    public static SearchQuery withThreshold(double[] embedding, int k, String databaseId, double threshold) {
+    public static SearchQuery withThreshold(float[] embedding, int k, String databaseId, double threshold) {
         return new SearchQuery(embedding, k, databaseId, threshold);
     }
 }

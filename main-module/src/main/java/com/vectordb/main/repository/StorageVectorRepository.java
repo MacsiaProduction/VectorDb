@@ -24,7 +24,7 @@ public class StorageVectorRepository implements VectorRepository {
     private final StorageClient storageClient;
     
     @Override
-    public List<VectorEntry> getTopKSimilar(double[] vector, int k, String dbId) throws VectorRepositoryException {
+    public List<VectorEntry> getTopKSimilar(float[] vector, int k, String dbId) throws VectorRepositoryException {
         log.debug("Getting top {} similar vectors in database {} via storage", k, dbId);
         
         SearchQuery query = SearchQuery.simple(vector, k, dbId);
@@ -43,7 +43,7 @@ public class StorageVectorRepository implements VectorRepository {
     }
     
     @Override
-    public String add(VectorEntry vectorEntry, String dbId) throws VectorRepositoryException {
+    public Long add(VectorEntry vectorEntry, String dbId) throws VectorRepositoryException {
         log.debug("Adding vector to database {} via storage", dbId);
         
         try {
@@ -57,7 +57,7 @@ public class StorageVectorRepository implements VectorRepository {
     }
     
     @Override
-    public boolean deleteById(String id, String dbId) throws VectorRepositoryException {
+    public boolean deleteById(Long id, String dbId) throws VectorRepositoryException {
         log.debug("Deleting vector {} from database {} via storage", id, dbId);
         
         try {

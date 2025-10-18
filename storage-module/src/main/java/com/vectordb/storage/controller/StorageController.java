@@ -4,12 +4,14 @@ import com.vectordb.common.model.VectorEntry;
 import com.vectordb.common.model.SearchQuery;
 import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.DatabaseInfo;
+import com.vectordb.common.serialization.SearchResultSerializer;
 import com.vectordb.storage.service.VectorStorageService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,23 +23,24 @@ import java.util.List;
 public class StorageController {
     
     private final VectorStorageService storageService;
+    private final SearchResultSerializer searchResultSerializer;
     
     @PostMapping("/vectors/{databaseId}")
-    public ResponseEntity<String> addVector(
+    public ResponseEntity<Long> addVector(
             @PathVariable String databaseId,
             @Valid @RequestBody VectorEntry entry) {
         try {
-            String id = storageService.add(entry, databaseId);
+            Long id = storageService.add(entry, databaseId);
             return ResponseEntity.status(HttpStatus.CREATED).body(id);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Failed to add vector: " + e.getMessage());
+            return ResponseEntity.badRequest().build();
         }
     }
     
     @GetMapping("/vectors/{databaseId}/{id}")
     public ResponseEntity<VectorEntry> getVector(
             @PathVariable String databaseId,
-            @PathVariable String id) {
+            @PathVariable Long id) {
         return storageService.get(id, databaseId)
                            .map(ResponseEntity::ok)
                            .orElse(ResponseEntity.notFound().build());
@@ -46,16 +49,26 @@ public class StorageController {
     @DeleteMapping("/vectors/{databaseId}/{id}")
     public ResponseEntity<Void> deleteVector(
             @PathVariable String databaseId,
-            @PathVariable String id) {
+            @PathVariable Long id) {
         boolean deleted = storageService.delete(id, databaseId);
-        return deleted ? ResponseEntity.noContent().build() 
+        return deleted ? ResponseEntity.noContent().build()
                        : ResponseEntity.notFound().build();
     }
     
-    @PostMapping("/search")
-    public ResponseEntity<List<SearchResult>> searchVectors(@Valid @RequestBody SearchQuery query) {
+    @PostMapping(value = "/search", produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_OCTET_STREAM_VALUE})
+    public ResponseEntity<?> searchVectors(
+            @Valid @RequestBody SearchQuery query,
+            @RequestHeader(value = "Accept", defaultValue = MediaType.APPLICATION_JSON_VALUE) String acceptHeader) {
         try {
             List<SearchResult> results = storageService.search(query);
+            
+            if (acceptHeader.contains(MediaType.APPLICATION_OCTET_STREAM_VALUE)) {
+                byte[] serialized = searchResultSerializer.serialize(results);
+                return ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .body(serialized);
+            }
+            
             return ResponseEntity.ok(results);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();

@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 public class DeleteVectorRequest {
     
     @Schema(description = "ID of vector to delete", example = "12345")
-    private String id;
+    private Long id;
     
     @Schema(description = "Database ID to delete vector from", example = "db1")
     private String dbId;

@@ -71,7 +71,7 @@ public class RocksDbStorage implements KeyValueStorage {
     }
     
     @Override
-    public Optional<VectorEntry> getVector(String databaseId, String id) throws Exception {
+    public Optional<VectorEntry> getVector(String databaseId, Long id) throws Exception {
         String key = databaseId + ":" + id;
         byte[] value = rocksDB.get(columnFamilyHandles.get(VECTOR_CF), key.getBytes());
         
@@ -84,7 +84,7 @@ public class RocksDbStorage implements KeyValueStorage {
     }
     
     @Override
-    public boolean deleteVector(String databaseId, String id) throws Exception {
+    public boolean deleteVector(String databaseId, Long id) throws Exception {
         String key = databaseId + ":" + id;
         byte[] existing = rocksDB.get(columnFamilyHandles.get(VECTOR_CF), key.getBytes());
         

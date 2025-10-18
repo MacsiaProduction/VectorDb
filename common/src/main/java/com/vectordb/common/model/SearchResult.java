@@ -9,14 +9,22 @@ public record SearchResult(
     @JsonProperty("entry")
     VectorEntry entry,
     
+    @NotNull
     @JsonProperty("distance")
-    double distance,
+    Double distance,
     
+    @NotNull
     @JsonProperty("similarity")
-    double similarity
+    Double similarity
 ) {
     @JsonCreator
     public SearchResult {
+        if (distance == null) {
+            throw new IllegalArgumentException("Distance cannot be null");
+        }
+        if (similarity == null) {
+            throw new IllegalArgumentException("Similarity cannot be null");
+        }
         if (distance < 0) {
             throw new IllegalArgumentException("Distance cannot be negative");
         }
