@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package protocommon;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.vectordb.common.protos";
+option java_outer_classname = "SearchResultProtos";
+
+message SearchResult {
+    message VectorEntry {
+        int64 id = 1;
+        repeated float embedding = 2;
+        string original_data = 3;
+        string database_id = 4;
+        google.protobuf.Timestamp created_at = 5;
+    }
+
+    VectorEntry entry = 1;
+    double distance = 2;
+    double similarity = 3;
+}
+
+message SearchResultList {
+    repeated SearchResult results = 1;
+}

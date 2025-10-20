@@ -333,8 +333,15 @@ class SearchResultSerializationTest {
             results.add(new SearchResult(entry, i * 0.01, 1.0 - i * 0.005));
         }
 
+        long startTime = System.currentTimeMillis();
         byte[] serialized = serializer.serialize(results);
+        long endTime = System.currentTimeMillis();
+        System.out.println("Время потраченное на сериализацию: " + (endTime - startTime) + " мс");
+
+        startTime = System.currentTimeMillis();
         List<SearchResult> deserialized = deserializer.deserialize(serialized);
+        endTime = System.currentTimeMillis();
+        System.out.println("Время потраченное на десериализацию: " + (endTime - startTime) + " мс");
 
         assertEquals(100, deserialized.size());
         
@@ -346,6 +353,113 @@ class SearchResultSerializationTest {
         int avgSizePerEntry = totalSize / 100;
 
         System.out.println("\n=== Анализ размера сериализации для 100 сущностей ===");
+        System.out.println("Общий размер: " + totalSize + " байт (" + String.format("%.2f", totalSize / 1024.0) + " КБ)");
+        System.out.println("Средний размер на сущность: " + avgSizePerEntry + " байт");
+        System.out.println("Размерность embedding: 384");
+        System.out.println("Размер одного embedding: " + (384 * 4) + " байт");
+        System.out.println("Накладные расходы на метаданные: " + (avgSizePerEntry - 384 * 4) + " байт на сущность");
+        System.out.println("===================================================\n");
+
+        assertTrue(totalSize > 0);
+        assertTrue(avgSizePerEntry > 384 * 4);
+    }
+
+    @Test
+    void test5000EntitiesWithSizeAnalysis() {
+        List<SearchResult> results = new ArrayList<>();
+        Instant baseTime = Instant.now();
+
+        for (int i = 0; i < 5000; i++) {
+            float[] embedding = new float[384];
+            for (int j = 0; j < embedding.length; j++) {
+                embedding[j] = (float) Math.sin(i * 0.1 + j * 0.01);
+            }
+
+            VectorEntry entry = createVectorEntry(
+                    (long) i,
+                    embedding,
+                    "database_" + i,
+                    "Пример текста для векторного поиска номер " + i,
+                    baseTime.plusSeconds(i)
+            );
+
+            results.add(new SearchResult(entry, i * 0.01, 1.0 - i * 0.00005));
+        }
+
+        long startTime = System.currentTimeMillis();
+        byte[] serialized = serializer.serialize(results);
+        long endTime = System.currentTimeMillis();
+        System.out.println("Время потраченное на сериализацию: " + (endTime - startTime) + " мс");
+
+        startTime = System.currentTimeMillis();
+        List<SearchResult> deserialized = deserializer.deserialize(serialized);
+        endTime = System.currentTimeMillis();
+        System.out.println("Время потраченное на десериализацию: " + (endTime - startTime) + " мс");
+
+        assertEquals(5000, deserialized.size());
+
+        for (int i = 0; i < 5000; i++) {
+            assertSearchResultEquals(results.get(i), deserialized.get(i));
+        }
+
+        int totalSize = serialized.length;
+        int avgSizePerEntry = totalSize / 5000;
+
+        System.out.println("\n=== Анализ размера сериализации для 5000 сущностей ===");
+        System.out.println("Общий размер: " + totalSize + " байт (" + String.format("%.2f", totalSize / 1024.0) + " КБ)");
+        System.out.println("Средний размер на сущность: " + avgSizePerEntry + " байт");
+        System.out.println("Размерность embedding: 384");
+        System.out.println("Размер одного embedding: " + (384 * 4) + " байт");
+        System.out.println("Накладные расходы на метаданные: " + (avgSizePerEntry - 384 * 4) + " байт на сущность");
+        System.out.println("===================================================\n");
+
+        assertTrue(totalSize > 0);
+        assertTrue(avgSizePerEntry > 384 * 4);
+    }
+
+    @Test
+    void testNEntitiesWithSizeAnalysis() {
+        int n = 1000;
+        List<SearchResult> results = new ArrayList<>();
+        Instant baseTime = Instant.now();
+
+        for (int i = 0; i < n; i++) {
+            float[] embedding = new float[384];
+            for (int j = 0; j < embedding.length; j++) {
+                embedding[j] = (float) Math.sin(i * 0.1 + j * 0.01);
+            }
+
+            VectorEntry entry = createVectorEntry(
+                    (long) i,
+                    embedding,
+                    "database_" + i,
+                    "Пример текста для векторного поиска номер " + i,
+                    baseTime.plusSeconds(i)
+            );
+
+            results.add(new SearchResult(entry, i * 0.01, 1.0 - i / (double)n));
+        }
+
+        long startTime = System.currentTimeMillis();
+        byte[] serialized = serializer.serialize(results);
+        long endTime = System.currentTimeMillis();
+        System.out.println("Время потраченное на сериализацию: " + (endTime - startTime) + " мс");
+
+        startTime = System.currentTimeMillis();
+        List<SearchResult> deserialized = deserializer.deserialize(serialized);
+        endTime = System.currentTimeMillis();
+        System.out.println("Время потраченное на десериализацию: " + (endTime - startTime) + " мс");
+
+        assertEquals(n, deserialized.size());
+
+        for (int i = 0; i < n; i++) {
+            assertSearchResultEquals(results.get(i), deserialized.get(i));
+        }
+
+        int totalSize = serialized.length;
+        int avgSizePerEntry = totalSize / n;
+
+        System.out.println("\n=== Анализ размера сериализации для " + n + " сущностей ===");
         System.out.println("Общий размер: " + totalSize + " байт (" + String.format("%.2f", totalSize / 1024.0) + " КБ)");
         System.out.println("Средний размер на сущность: " + avgSizePerEntry + " байт");
         System.out.println("Размерность embedding: 384");

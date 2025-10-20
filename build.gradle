@@ -2,6 +2,7 @@ plugins {
     id 'java-library'
     id 'org.springframework.boot' version '3.3.4' apply false
     id 'io.spring.dependency-management' version '1.1.6' apply false
+    id 'com.google.protobuf' version '0.9.4' apply false
 }
 
 allprojects {
@@ -56,3 +57,46 @@ configure(subprojects.findAll { it.name != 'common' }) {
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
     }
 }
+// Configure Protobuf only for common
+configure(subprojects.findAll { it.name == 'common' }) {
+    apply plugin: 'com.google.protobuf'
+
+    dependencies {
+        implementation 'com.google.protobuf:protobuf-java:3.25.1'
+        implementation 'com.google.protobuf:protobuf-java-util:3.25.1'
+        implementation 'com.google.protobuf:protobuf-java-util:3.25.1'
+    }
+
+    protobuf {
+        protoc {
+            // Скачать компилятор protoc автоматически
+            artifact = 'com.google.protobuf:protoc:3.25.1'
+        }
+
+        // Генерация файлов в правильную директорию
+        generateProtoTasks {
+            all().each { task ->
+                task.builtins {
+                    java {
+                        option 'lite'
+                    }
+                }
+            }
+        }
+
+    }
+
+    sourceSets {
+        main {
+            java {
+                srcDirs 'build/generated/source/protos/main/java'
+            }
+        }
+    }
+
+    // Очистка сгенерированных файлов
+    clean {
+        delete protobuf.generatedFilesBaseDir
+    }
+}
+
