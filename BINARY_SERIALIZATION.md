@@ -49,12 +49,11 @@ Endpoint `/api/v1/storage/search` автоматически выбирает ф
 - Бинарный формат тратит в среднем на 68% меньше времени на десериализацию
 - Общий размер сообщения бинарного формата в среднем меньше на ~1%
 
-  <img width="830" height="686" alt="image" src="https://github.com/user-attachments/assets/3d5f37a0-3467-45e3-9b1e-fa76c9675897" />
-
-  <img width="789" height="621" alt="image" src="https://github.com/user-attachments/assets/89282791-5db2-4e45-bb2c-d63c1863885c" />
-
-  <img width="791" height="618" alt="image" src="https://github.com/user-attachments/assets/ae579dcd-aba7-4f56-988e-802f1da02c8d" />
-
+**Сравнение с Apache Avro**
+- Бинарный формат тратит в среднем на 42% меньше времени на сериализацию
+- Бинарный формат тратит в среднем на 87% меньше времени на десериализацию
+- Размер сообщения бинарного формата совпадает с размером сообщения Apache Avro в пределах погрешности
+  
 
 
 **Вывод:**

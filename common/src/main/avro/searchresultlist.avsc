@@ -1,0 +1,14 @@
+{
+  "namespace": "com.vectordb.common.avro",
+  "type": "record",
+  "name": "SearchResultList",
+  "fields": [
+    {
+      "name": "results",
+      "type": {
+        "type": "array",
+        "items": "SearchResult"
+      }
+    }
+  ]
+}

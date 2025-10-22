@@ -1,0 +1,33 @@
+{
+  "namespace": "com.vectordb.common.avro",
+  "type": "record",
+  "name": "VectorEntry",
+  "fields": [
+    {
+      "name": "id",
+      "type": "long"
+    },
+    {
+      "name": "embedding",
+      "type": {
+        "type": "array",
+        "items": "float"
+      }
+    },
+    {
+      "name": "original_data",
+      "type": "string"
+    },
+    {
+      "name": "database_id",
+      "type": "string"
+    },
+    {
+      "name": "created_at",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      }
+    }
+  ]
+}

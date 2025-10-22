@@ -3,6 +3,7 @@ plugins {
     id 'org.springframework.boot' version '3.3.4' apply false
     id 'io.spring.dependency-management' version '1.1.6' apply false
     id 'com.google.protobuf' version '0.9.4' apply false
+    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1' apply false
 }
 
 allprojects {
@@ -60,11 +61,17 @@ configure(subprojects.findAll { it.name != 'common' }) {
 // Configure Protobuf only for common
 configure(subprojects.findAll { it.name == 'common' }) {
     apply plugin: 'com.google.protobuf'
+    apply plugin: 'com.github.davidmc24.gradle.plugin.avro'
 
     dependencies {
         implementation 'com.google.protobuf:protobuf-java:3.25.1'
         implementation 'com.google.protobuf:protobuf-java-util:3.25.1'
         implementation 'com.google.protobuf:protobuf-java-util:3.25.1'
+        implementation 'org.apache.avro:avro:1.11.3'
+        implementation 'org.apache.avro:avro-compiler:1.11.3'
+        implementation 'org.apache.avro:avro-maven-plugin:1.11.3'
+        // Дополнительные утилиты
+        implementation 'org.apache.avro:avro-ipc:1.11.3'
     }
 
     protobuf {
@@ -97,6 +104,13 @@ configure(subprojects.findAll { it.name == 'common' }) {
     // Очистка сгенерированных файлов
     clean {
         delete protobuf.generatedFilesBaseDir
+    }
+
+    avro {
+        createSetters = false
+        fieldVisibility = "PRIVATE"
+        outputCharacterEncoding = "UTF-8"
+        stringType = "String"
     }
 }
 
