@@ -38,6 +38,8 @@ Endpoint `/api/v1/storage/search` автоматически выбирает ф
 - JSON несжатый: 437 КБ
 - JSON сжатый: 181 КБ
 
+
+**Сравнение бинарного формата с Protobuf и Apache Avro**
   <img width="1320" height="843" alt="image" src="https://github.com/user-attachments/assets/e913ad8b-d05d-4abd-89d0-2f8b90d712e7" />
 
 
