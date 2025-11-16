@@ -5,6 +5,7 @@ import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.exception.VectorRepositoryException;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository interface for vector storage operations.
@@ -21,6 +22,15 @@ public interface VectorRepository {
      * @throws VectorRepositoryException if search fails
      */
     List<VectorEntry> getTopKSimilar(float[] vector, int k, String dbId) throws VectorRepositoryException;
+    
+    /**
+     * Find a vector by ID
+     * @param id vector ID
+     * @param dbId database identifier
+     * @return Optional containing the vector entry if found, empty otherwise
+     * @throws VectorRepositoryException if search fails
+     */
+    Optional<VectorEntry> findById(Long id, String dbId) throws VectorRepositoryException;
     
     /**
      * Save a vector entry to the specified database

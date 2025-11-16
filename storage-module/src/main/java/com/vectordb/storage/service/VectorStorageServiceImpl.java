@@ -6,13 +6,15 @@ import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.DatabaseInfo;
 import com.vectordb.storage.kv.RocksDbStorage;
 import com.vectordb.storage.index.VectorIndex;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @RequiredArgsConstructor
@@ -22,32 +24,79 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     private final RocksDbStorage storage;
     private final VectorIndex vectorIndex;
     
-    private final AtomicLong idGenerator = new AtomicLong(System.currentTimeMillis());
+    @PostConstruct
+    public void init() {
+        try {
+            log.info("Initializing vector storage service...");
+            
+            List<DatabaseInfo> databases = storage.getAllDatabases();
+            log.info("Found {} existing databases in storage", databases.size());
+            
+            for (DatabaseInfo dbInfo : databases) {
+                try {
+                    log.info("Restoring database {}: dimension={}, vectorCount={}",
+                            dbInfo.id(), dbInfo.dimension(), dbInfo.vectorCount());
+                    
+                    vectorIndex.setDimension(dbInfo.dimension());
+                    log.info("Set dimension {} for database {}", dbInfo.dimension(), dbInfo.id());
+                    
+                    List<VectorEntry> vectors = storage.getAllVectors(dbInfo.id());
+                    
+                    if (!vectors.isEmpty()) {
+                        log.info("Rebuilding index for database {} with {} vectors",
+                                dbInfo.id(), vectors.size());
+                        for (VectorEntry vector : vectors) {
+                            vectorIndex.add(vector, dbInfo.id());
+                        }
+                        
+                        vectorIndex.build(dbInfo.id());
+                        log.info("Successfully rebuilt index for database {}, index size: {}",
+                                dbInfo.id(), vectorIndex.size(dbInfo.id()));
+                    } else {
+                        log.info("Database {} has no vectors, skipping index rebuild", dbInfo.id());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to restore database {}", dbInfo.id(), e);
+                }
+            }
+            
+            log.info("Vector storage service initialization complete - restored {} databases", databases.size());
+        } catch (Exception e) {
+            log.error("Failed to initialize vector storage service", e);
+        }
+    }
     
     @Override
     public Long add(VectorEntry entry, String databaseId) {
         try {
-            // Validate that database exists
             Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
             if (dbInfo.isEmpty()) {
                 throw new IllegalArgumentException("Database not found: " + databaseId);
             }
             
-            // Generate unique ID for the vector
-            Long vectorId = generateVectorId();
-            VectorEntry entryWithId = entry.withId(vectorId);
+            if (entry.id() == null) {
+                throw new IllegalArgumentException("Vector ID must be provided");
+            }
             
-            storage.putVector(databaseId, entryWithId);
+            storage.putVector(databaseId, entry);
             
-            // Add to vector index for this database
-            vectorIndex.add(entryWithId, databaseId);
+            try {
+                vectorIndex.add(entry, databaseId);
+            } catch (IllegalStateException e) {
+                if (e.getMessage().contains("Dimension must be set")) {
+                    log.info("Setting dimension for database {} index: {}", databaseId, dbInfo.get().dimension());
+                    vectorIndex.setDimension(dbInfo.get().dimension());
+                    vectorIndex.add(entry, databaseId);
+                } else {
+                    throw e;
+                }
+            }
             
-            // Update vector count
             DatabaseInfo updatedInfo = dbInfo.get().withVectorCount(dbInfo.get().vectorCount() + 1);
             storage.putDatabaseInfo(updatedInfo);
             
-            log.debug("Added vector {} to database {}", vectorId, databaseId);
-            return vectorId;
+            log.debug("Added vector {} to database {}", entry.id(), databaseId);
+            return entry.id();
             
         } catch (Exception e) {
             log.error("Failed to add vector to database {}", databaseId, e);
@@ -55,12 +104,6 @@ public class VectorStorageServiceImpl implements VectorStorageService {
         }
     }
     
-    /**
-     * Generate unique vector ID
-     */
-    private Long generateVectorId() {
-        return idGenerator.incrementAndGet();
-    }
     
     @Override
     public Optional<VectorEntry> get(Long id, String databaseId) {
@@ -75,20 +118,25 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     @Override
     public boolean delete(Long id, String databaseId) {
         try {
+            log.info("Attempting to delete vector {} from database {}", id, databaseId);
+            
+            Optional<VectorEntry> existing = storage.getVector(databaseId, id);
+            log.info("Vector {} exists in storage: {}", id, existing.isPresent());
+            
             boolean deleted = storage.deleteVector(databaseId, id);
+            log.info("Storage delete result for vector {}: {}", id, deleted);
             
             if (deleted) {
-                // Remove from vector index for this database
                 boolean removedFromIndex = vectorIndex.remove(id, databaseId);
-                log.debug("Removed vector {} from index for database {}: {}", id, databaseId, removedFromIndex);
+                log.info("Removed vector {} from index for database {}: {}", id, databaseId, removedFromIndex);
                 
-                // Update vector count
                 Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
                 if (dbInfo.isPresent()) {
                     DatabaseInfo updatedInfo = dbInfo.get().withVectorCount(
                         Math.max(0, dbInfo.get().vectorCount() - 1)
                     );
                     storage.putDatabaseInfo(updatedInfo);
+                    log.info("Updated vector count for database {} to {}", databaseId, updatedInfo.vectorCount());
                 }
             }
             
@@ -107,13 +155,11 @@ public class VectorStorageServiceImpl implements VectorStorageService {
                 throw new IllegalArgumentException("Database ID is required for search");
             }
             
-            // Validate database exists
             Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
             if (dbInfo.isEmpty()) {
                 throw new IllegalArgumentException("Database not found: " + databaseId);
             }
             
-            // Use vector index for search in this database
             return vectorIndex.search(query.embedding(), query.k(), databaseId);
             
         } catch (Exception e) {
@@ -133,9 +179,6 @@ public class VectorStorageServiceImpl implements VectorStorageService {
             DatabaseInfo dbInfo = DatabaseInfo.forNewDatabase(databaseId, name, dimension);
             storage.putDatabaseInfo(dbInfo);
             
-            // Set dimension for vector index
-            vectorIndex.setDimension(dimension);
-            
             log.info("Created database: {} with dimension: {}", databaseId, dimension);
             return dbInfo;
             
@@ -151,12 +194,9 @@ public class VectorStorageServiceImpl implements VectorStorageService {
             boolean dbDeleted = storage.deleteDatabaseInfo(databaseId);
             
             if (dbDeleted) {
-                // Delete all vectors in the database
                 List<VectorEntry> vectors = storage.getAllVectors(databaseId);
                 for (VectorEntry vector : vectors) {
-                    // Remove from storage
                     storage.deleteVector(databaseId, vector.id());
-                    // Remove from vector index for this database
                     vectorIndex.remove(vector.id(), databaseId);
                 }
                 
@@ -194,22 +234,18 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     @Override
     public boolean rebuildIndex(String databaseId) {
         try {
-            // Validate database exists
             Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
             if (dbInfo.isEmpty()) {
                 throw new IllegalArgumentException("Database not found: " + databaseId);
             }
             
-            // Rebuild the vector index for this database
             vectorIndex.clear(databaseId);
             
-            // Get all vectors and add them to the index
             List<VectorEntry> vectors = storage.getAllVectors(databaseId);
             for (VectorEntry vector : vectors) {
                 vectorIndex.add(vector, databaseId);
             }
             
-            // Build the index for this database
             vectorIndex.build(databaseId);
             
             log.info("Rebuilt index for database: {}", databaseId);
@@ -224,12 +260,95 @@ public class VectorStorageServiceImpl implements VectorStorageService {
     @Override
     public boolean isHealthy() {
         try {
-            // Simple health check - try to list databases
             storage.getAllDatabases();
             return true;
         } catch (Exception e) {
             log.warn("Health check failed", e);
             return false;
+        }
+    }
+
+    @Override
+    public List<VectorEntry> scanByRange(String databaseId, long fromExclusive, long toInclusive, int limit) {
+        try {
+            List<VectorEntry> all = new ArrayList<>(storage.getAllVectors(databaseId));
+            return all.stream()
+                    .sorted(Comparator.comparingLong(VectorEntry::id))
+                    .filter(entry -> entry.id() > fromExclusive && entry.id() <= toInclusive)
+                    .limit(Math.max(limit, 0))
+                    .toList();
+        } catch (Exception e) {
+            log.error("Failed to scan vectors in database {}", databaseId, e);
+            throw new RuntimeException("Failed to scan range for database " + databaseId, e);
+        }
+    }
+
+    @Override
+    public void putBatch(String databaseId, List<VectorEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
+        try {
+            Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
+            if (dbInfo.isEmpty()) {
+                throw new IllegalArgumentException("Database not found: " + databaseId);
+            }
+            
+            for (VectorEntry entry : entries) {
+                if (entry.id() == null) {
+                    throw new IllegalArgumentException("Vector ID must be provided for all entries in batch");
+                }
+                storage.putVector(databaseId, entry);
+                
+                try {
+                    vectorIndex.add(entry, databaseId);
+                } catch (IllegalStateException e) {
+                    if (e.getMessage().contains("Dimension must be set")) {
+                        log.info("Setting dimension for database {} index: {}", databaseId, dbInfo.get().dimension());
+                        vectorIndex.setDimension(dbInfo.get().dimension());
+                        vectorIndex.add(entry, databaseId);
+                    } else {
+                        throw e;
+                    }
+                }
+            }
+            adjustVectorCount(databaseId, entries.size());
+        } catch (Exception e) {
+            log.error("Failed to insert batch into database {}", databaseId, e);
+            throw new RuntimeException("Batch insert failed for database " + databaseId, e);
+        }
+    }
+
+    @Override
+    public int deleteBatch(String databaseId, List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        int removed = 0;
+        try {
+            for (Long id : ids) {
+                if (storage.deleteVector(databaseId, id)) {
+                    removed++;
+                    vectorIndex.remove(id, databaseId);
+                }
+            }
+            adjustVectorCount(databaseId, -removed);
+            return removed;
+        } catch (Exception e) {
+            log.error("Failed to delete batch from database {}", databaseId, e);
+            throw new RuntimeException("Batch delete failed for database " + databaseId, e);
+        }
+    }
+
+    private void adjustVectorCount(String databaseId, int delta) throws Exception {
+        if (delta == 0) {
+            return;
+        }
+        Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
+        if (dbInfo.isPresent()) {
+            DatabaseInfo info = dbInfo.get();
+            long updatedCount = Math.max(0L, info.vectorCount() + delta);
+            storage.putDatabaseInfo(info.withVectorCount(updatedCount));
         }
     }
 }

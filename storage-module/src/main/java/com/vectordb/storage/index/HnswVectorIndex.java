@@ -10,8 +10,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -91,6 +103,10 @@ public class HnswVectorIndex implements VectorIndex {
         try {
             DatabaseIndex dbIndex = getOrCreateDatabaseIndex(databaseId);
             
+            log.info("BUILD CALLED: database={}, dimension={}, isBuilt={}, vectorBuffer.size={}, idToEntry.size={}",
+                    databaseId, dbIndex.dimension, dbIndex.isBuilt,
+                    dbIndex.vectorBuffer.size(), dbIndex.idToEntry.size());
+            
             // Check if dimension is set
             if (dbIndex.dimension == -1) {
                 throw new IllegalStateException("Dimension must be set before building index for database " + databaseId);
@@ -107,12 +123,12 @@ public class HnswVectorIndex implements VectorIndex {
                     .build();
 
                 dbIndex.isBuilt = true;
-                log.info("Built empty HNSW index for database {} with dimension={}", databaseId, dbIndex.dimension);
-                dbIndex.isBuilt = true;
+                log.info("Built empty HNSW index for database {} with dimension={}. idToEntry.size={}",
+                        databaseId, dbIndex.dimension, dbIndex.idToEntry.size());
                 return;
             }
 
-            log.info("Building HNSW index for database {} with {} vectors, dimension={}", 
+            log.info("Building HNSW index for database {} with {} vectors, dimension={}",
                     databaseId, dbIndex.vectorBuffer.size(), dbIndex.dimension);
             
             DistanceFunction<float[], Float> distanceFunction = createDistanceFunction();
@@ -133,8 +149,8 @@ public class HnswVectorIndex implements VectorIndex {
             
             dbIndex.isBuilt = true;
             dbIndex.vectorBuffer.clear();
-            log.info("Successfully built HNSW index for database {} with {} vectors using pure Java hnswlib", 
-                    databaseId, items.size());
+            log.info("Successfully built HNSW index for database {} with {} vectors using pure Java hnswlib. idToEntry size: {}",
+                    databaseId, items.size(), dbIndex.idToEntry.size());
             
         } catch (Exception e) {
             log.error("Failed to build HNSW index for database {}", databaseId, e);
@@ -159,7 +175,8 @@ public class HnswVectorIndex implements VectorIndex {
                             databaseId, dbIndex.dimension, vector.dimension()));
                 }
                 dbIndex.vectorBuffer.add(vector);
-                log.debug("Buffered vector {} for database {} index building", vector.id(), databaseId);
+                log.info("ADD (not built): Buffered vector {} for database {}. Buffer size now: {}",
+                        vector.id(), databaseId, dbIndex.vectorBuffer.size());
                 return;
             }
             
@@ -196,24 +213,38 @@ public class HnswVectorIndex implements VectorIndex {
         try {
             DatabaseIndex dbIndex = databaseIndices.get(databaseId);
             if (dbIndex == null) {
-                log.debug("Database {} not found", databaseId);
+                log.info("Remove: Database {} not found in databaseIndices", databaseId);
                 return false;
             }
             
+            log.info("Remove: Database {} found. isBuilt={}, hnswIndex={}, idToEntry.size={}, deletedIds.size={}",
+                    databaseId, dbIndex.isBuilt, dbIndex.hnswIndex != null,
+                    dbIndex.idToEntry.size(), dbIndex.deletedIds.size());
+            
             if (!dbIndex.isBuilt || dbIndex.hnswIndex == null) {
                 boolean removed = dbIndex.vectorBuffer.removeIf(entry -> entry.id().equals(vectorId));
-                log.debug("Removed vector {} from buffer for database {}: {}", vectorId, databaseId, removed);
+                log.info("Removed vector {} from buffer for database {}: {}", vectorId, databaseId, removed);
                 return removed;
             }
             
-            if (!dbIndex.idToEntry.containsKey(vectorId) || dbIndex.deletedIds.contains(vectorId)) {
-                log.debug("Vector {} not found in built index for database {} or already deleted", vectorId, databaseId);
+            boolean inIdToEntry = dbIndex.idToEntry.containsKey(vectorId);
+            boolean inDeletedIds = dbIndex.deletedIds.contains(vectorId);
+            log.info("Remove: Checking vector {} - inIdToEntry={}, inDeletedIds={}", vectorId, inIdToEntry, inDeletedIds);
+            
+            if (!inIdToEntry || inDeletedIds) {
+                log.info("Vector {} not found in built index for database {} or already deleted. Checking first 5 IDs in idToEntry...",
+                        vectorId, databaseId);
+                int count = 0;
+                for (Long id : dbIndex.idToEntry.keySet()) {
+                    log.info("  idToEntry key[{}]: {}", count, id);
+                    if (++count >= 5) break;
+                }
                 return false;
             }
             
             // Помечаем как удаленный вместо физического удаления из HNSW индекса
             dbIndex.deletedIds.add(vectorId);
-            log.debug("Marked vector {} as deleted in built HNSW index for database {}", vectorId, databaseId);
+            log.info("Marked vector {} as deleted in built HNSW index for database {}", vectorId, databaseId);
             return true;
             
         } finally {
@@ -250,9 +281,9 @@ public class HnswVectorIndex implements VectorIndex {
             VectorEntry queryItem = new VectorEntry(
                 tempQueryId,                                      // id
                 queryVector,                                      // embedding
-                null,                                             // originalData
+                "__query__",                                      // originalData
                 databaseId,                                       // databaseId
-                null                                              // createdAt
+                Instant.EPOCH                                     // createdAt
             );
             
             dbIndex.hnswIndex.add(queryItem);
@@ -277,10 +308,6 @@ public class HnswVectorIndex implements VectorIndex {
                     VectorEntry entry = dbIndex.idToEntry.get(itemId);
                     if (entry == null) {
                         entry = item;
-                    }
-                    if (entry == null) {
-                        log.warn("No entry found for vector ID: {} in database {}", itemId, databaseId);
-                        continue;
                     }
                     
                     float distance = hnswResult.distance();
@@ -318,7 +345,10 @@ public class HnswVectorIndex implements VectorIndex {
             }
             
             File file = new File(filePath);
-            file.getParentFile().mkdirs();
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
+                throw new IOException("Failed to create directory: " + parentDir);
+            }
             
             try (FileOutputStream fos = new FileOutputStream(filePath);
                  ObjectOutputStream out = new ObjectOutputStream(fos)) {

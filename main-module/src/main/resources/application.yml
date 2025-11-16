@@ -17,10 +17,20 @@ springdoc:
     tryItOutEnabled: true
 
 storage-module:
-  host: localhost
-  port: 8081
   connection-timeout: 5000
   read-timeout: 10000
+
+zookeeper:
+  connect-string: localhost:2181
+  session-timeout: 10s
+  connection-timeout: 5s
+  retry:
+    base-sleep: 1s
+    max-retries: 3
+
+vectordb:
+  rebalancer:
+    batch-size: 100
 
 management:
   endpoints:

@@ -49,7 +49,7 @@ class HnswVectorIndexTest {
         return VectorEntry.builder()
             .id(id)
             .embedding(embedding)
-            .originalData(null)
+            .originalData("test-" + id)
             .databaseId(TEST_DB_ID)
             .createdAt(now)
             .build();
@@ -183,13 +183,10 @@ class HnswVectorIndexTest {
 
     @Test
     void testSearchDimensionMismatchOnUnbuiltIndex() {
-        VectorEntry vector = VectorEntry.builder()
-            .id("test1")
-            .embedding(new double[]{1.0, 0.0, 0.0})
-            .build();
+        VectorEntry vector = createTestVector(1L, new float[]{1.0f, 0.0f, 0.0f});
 
         hnswIndex.add(vector, TEST_DB_ID);
-        double[] wrongDimensionQuery = {1.0, 0.0};
+        float[] wrongDimensionQuery = {1.0f, 0.0f};
         assertThrows(IllegalArgumentException.class, () -> hnswIndex.search(wrongDimensionQuery, 1, TEST_DB_ID));
     }
 
@@ -393,8 +390,11 @@ class HnswVectorIndexTest {
         );
 
         VectorEntry vector = VectorEntry.builder()
-            .id("test1")
-            .embedding(new double[]{1.0, 0.0, 0.0})
+            .id(1L)
+            .embedding(new float[]{1.0f, 0.0f, 0.0f})
+            .originalData("test")
+            .databaseId(TEST_DB_ID)
+            .createdAt(Instant.now())
             .build();
 
         // Should throw exception when trying to add vector without setting dimension

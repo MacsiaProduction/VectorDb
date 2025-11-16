@@ -1,0 +1,204 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: zookeeper:3.9
+    container_name: vector-db-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      - ZOO_MY_ID=1
+      - ZOO_SERVERS=server.1=zookeeper:2888:3888;2181
+    volumes:
+      - vector-db-zookeeper-data:/data
+      - vector-db-zookeeper-datalog:/datalog
+    networks:
+      - vector-db-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  zookeeper-ui:
+    image: elkozmon/zoonavigator:latest
+    container_name: vector-db-zookeeper-ui
+    ports:
+      - "9000:9000"
+    environment:
+      - HTTP_PORT=9000
+    networks:
+      - vector-db-network
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  vector-db-storage-1:
+    image: vector-db-storage:latest
+    build:
+      context: ./storage-module
+      dockerfile: Dockerfile
+    container_name: vector-db-storage-1
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - VECTOR_DB_STORAGE_DATA_PATH=/app/data
+      - VECTOR_DB_STORAGE_SHARD_ID=shard1
+      - SERVER_PORT=8081
+      - JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -Djava.library.path=/usr/lib/x86_64-linux-gnu
+    volumes:
+      - vector-db-data-1:/app/data
+      - vector-db-logs-1:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/storage/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - vector-db-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  vector-db-storage-2:
+    image: vector-db-storage:latest
+    build:
+      context: ./storage-module
+      dockerfile: Dockerfile
+    container_name: vector-db-storage-2
+    ports:
+      - "8082:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - VECTOR_DB_STORAGE_DATA_PATH=/app/data
+      - VECTOR_DB_STORAGE_SHARD_ID=shard2
+      - SERVER_PORT=8081
+      - JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -Djava.library.path=/usr/lib/x86_64-linux-gnu
+    volumes:
+      - vector-db-data-2:/app/data
+      - vector-db-logs-2:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/storage/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - vector-db-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  vector-db-storage-3:
+    image: vector-db-storage:latest
+    build:
+      context: ./storage-module
+      dockerfile: Dockerfile
+    container_name: vector-db-storage-3
+    ports:
+      - "8083:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - VECTOR_DB_STORAGE_DATA_PATH=/app/data
+      - VECTOR_DB_STORAGE_SHARD_ID=shard3
+      - SERVER_PORT=8081
+      - JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -Djava.library.path=/usr/lib/x86_64-linux-gnu
+    volumes:
+      - vector-db-data-3:/app/data
+      - vector-db-logs-3:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/storage/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - vector-db-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - with-shard3
+
+  vector-db-main:
+    image: vector-db-main:latest
+    build:
+      context: ./main-module
+      dockerfile: Dockerfile
+    container_name: vector-db-main
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - ZOOKEEPER_CONNECT_STRING=zookeeper:2181
+      - ZOOKEEPER_SESSION_TIMEOUT=10s
+      - ZOOKEEPER_CONNECTION_TIMEOUT=5s
+      - ZOOKEEPER_RETRY_BASE_SLEEP=1s
+      - ZOOKEEPER_RETRY_MAX_RETRIES=3
+      - JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      vector-db-storage-1:
+        condition: service_healthy
+      vector-db-storage-2:
+        condition: service_healthy
+    networks:
+      - vector-db-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  vector-db-zookeeper-data:
+    driver: local
+  vector-db-zookeeper-datalog:
+    driver: local
+  vector-db-data-1:
+    driver: local
+  vector-db-logs-1:
+    driver: local
+  vector-db-data-2:
+    driver: local
+  vector-db-logs-2:
+    driver: local
+  vector-db-data-3:
+    driver: local
+  vector-db-logs-3:
+    driver: local
+
+networks:
+  vector-db-network:
+    driver: bridge
+

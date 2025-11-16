@@ -40,4 +40,13 @@ public interface VectorStorageService {
     
     /** Проверить здоровье хранилища */
     boolean isHealthy();
+
+    /** Сканировать диапазон векторов по ID (используется для миграции) */
+    List<VectorEntry> scanByRange(String databaseId, long fromExclusive, long toInclusive, int limit);
+
+    /** Добавить батч векторов (используется для миграции) */
+    void putBatch(String databaseId, List<VectorEntry> entries);
+
+    /** Удалить батч векторов */
+    int deleteBatch(String databaseId, List<Long> ids);
 }

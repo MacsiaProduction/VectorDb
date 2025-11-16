@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -47,6 +48,24 @@ public class VectorController {
         return ResponseEntity.ok(result);
     }
     
+    @GetMapping("/{id}")
+    @Operation(summary = "Get a vector by ID",
+               description = "Retrieve a vector entry by its ID from the specified database")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Vector successfully retrieved"),
+        @ApiResponse(responseCode = "404", description = "Vector not found"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during vector retrieval")
+    })
+    public ResponseEntity<VectorEntry> getById(
+            @PathVariable Long id,
+            @RequestParam String dbId) {
+        log.info("Received get request: id={}, dbId={}", id, dbId);
+        
+        Optional<VectorEntry> result = vectorService.get(id, dbId);
+        return result.map(ResponseEntity::ok)
+                     .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+    
     @PostMapping("/add")
     @Operation(summary = "Add a vector", 
                description = "Add a new vector entry to the specified database")
@@ -66,8 +85,8 @@ public class VectorController {
     }
     
     @DeleteMapping("/delete")
-    @Operation(summary = "Delete a vector", 
-               description = "Delete a vector entry from the specified database")
+    @Operation(summary = "Delete a vector (body)",
+               description = "Delete a vector entry from the specified database using request body")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Vector successfully deleted"),
         @ApiResponse(responseCode = "404", description = "Database not found"),
@@ -78,5 +97,28 @@ public class VectorController {
         
         boolean result = vectorService.delete(request.getId(), request.getDbId());
         return ResponseEntity.ok(result);
+    }
+    
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a vector (path)",
+               description = "Delete a vector entry from the specified database using path parameter")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Vector successfully deleted"),
+        @ApiResponse(responseCode = "404", description = "Database not found"),
+        @ApiResponse(responseCode = "500", description = "Internal server error during vector deletion")
+    })
+    public ResponseEntity<Boolean> deleteByPath(
+            @PathVariable String id,
+            @RequestParam String dbId) {
+        try {
+            Long vectorId = Long.parseLong(id);
+            log.info("Received delete request (path): id={}, dbId={}", vectorId, dbId);
+            
+            boolean result = vectorService.delete(vectorId, dbId);
+            return ResponseEntity.ok(result);
+        } catch (NumberFormatException e) {
+            log.error("Invalid vector ID format: {}", id);
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

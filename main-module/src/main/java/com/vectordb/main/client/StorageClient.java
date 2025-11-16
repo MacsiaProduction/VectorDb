@@ -5,18 +5,14 @@ import com.vectordb.common.model.SearchQuery;
 import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.common.serialization.SearchResultDeserializer;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 
-@Component
-@RequiredArgsConstructor
 @Slf4j
 public class StorageClient {
     
@@ -24,6 +20,11 @@ public class StorageClient {
     
     private final WebClient storageWebClient;
     private final SearchResultDeserializer searchResultDeserializer;
+
+    public StorageClient(WebClient storageWebClient, SearchResultDeserializer searchResultDeserializer) {
+        this.storageWebClient = storageWebClient;
+        this.searchResultDeserializer = searchResultDeserializer;
+    }
     
     public Mono<Long> addVector(VectorEntry entry, String databaseId) {
         log.debug("Adding vector to database {} via storage service", databaseId);
@@ -136,30 +137,41 @@ public class StorageClient {
                 .doOnSuccess(databases -> log.debug("Found {} databases", databases.size()))
                 .doOnError(error -> log.error("Failed to list databases: {}", error.getMessage()));
     }
-    
-    public Mono<Boolean> rebuildIndex(String databaseId) {
-        log.debug("Rebuilding index for database {} via storage service", databaseId);
-        
-        return storageWebClient
-                .post()
-                .uri(STORAGE_API_BASE_PATH + "/databases/{databaseId}/rebuild", databaseId)
-                .retrieve()
-                .toBodilessEntity()
-                .map(response -> response.getStatusCode().is2xxSuccessful())
-                .doOnSuccess(rebuilt -> log.debug("Database {} rebuild result: {}", databaseId, rebuilt));
-    }
-    
-    public Mono<Boolean> isHealthy() {
-        log.debug("Checking storage service health");
-        
+
+    public record CreateDatabaseRequest(String id, String name, int dimension) {}
+
+    public Mono<List<VectorEntry>> scanRange(String databaseId, long fromExclusive, long toInclusive, int limit) {
         return storageWebClient
                 .get()
-                .uri(STORAGE_API_BASE_PATH + "/health")
+                .uri(uriBuilder -> uriBuilder
+                        .path(STORAGE_API_BASE_PATH + "/admin/vectors/{databaseId}/range")
+                        .queryParam("fromExclusive", fromExclusive)
+                        .queryParam("toInclusive", toInclusive)
+                        .queryParam("limit", limit)
+                        .build(databaseId))
                 .retrieve()
-                .bodyToMono(String.class)
-                .map("UP"::equals)
-                .doOnSuccess(healthy -> log.debug("Storage service health: {}", healthy ? "UP" : "DOWN"));
+                .bodyToFlux(VectorEntry.class)
+                .collectList();
     }
-    
-    public record CreateDatabaseRequest(String id, String name, int dimension) {}
+
+    public Mono<Void> putBatch(String databaseId, List<VectorEntry> entries) {
+        return storageWebClient
+                .post()
+                .uri(STORAGE_API_BASE_PATH + "/admin/vectors/{databaseId}/batch", databaseId)
+                .bodyValue(entries)
+                .retrieve()
+                .toBodilessEntity()
+                .then();
+    }
+
+    public Mono<Integer> deleteBatch(String databaseId, List<Long> ids) {
+        return storageWebClient
+                .method(org.springframework.http.HttpMethod.DELETE)
+                .uri(STORAGE_API_BASE_PATH + "/admin/vectors/{databaseId}/batch", databaseId)
+                .bodyValue(new DeleteBatchRequest(ids))
+                .retrieve()
+                .bodyToMono(Integer.class);
+    }
+
+    public record DeleteBatchRequest(List<Long> ids) {}
 }

@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: vector-db-main
+
+zookeeper:
+  connect-string: ${ZOOKEEPER_CONNECT_STRING:zookeeper:2181}
+  session-timeout: ${ZOOKEEPER_SESSION_TIMEOUT:10s}
+  connection-timeout: ${ZOOKEEPER_CONNECTION_TIMEOUT:5s}
+  retry:
+    base-sleep: ${ZOOKEEPER_RETRY_BASE_SLEEP:1s}
+    max-retries: ${ZOOKEEPER_RETRY_MAX_RETRIES:3}
+
+storage-module:
+  connection-timeout: 5000
+  read-timeout: 10000
+
+vectordb:
+  rebalancer:
+    batch-size: 100
+
+logging:
+  level:
+    com.vectordb: INFO
+    org.springframework.web: INFO
+    org.apache.curator: WARN
+

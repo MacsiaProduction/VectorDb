@@ -3,6 +3,8 @@ package com.vectordb.main.service;
 import com.vectordb.common.model.DatabaseInfo;
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.exception.VectorRepositoryException;
+import com.vectordb.main.id.VectorId;
+import com.vectordb.main.id.VectorIdGenerator;
 import com.vectordb.main.repository.VectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Service for vector operations.
@@ -21,6 +24,7 @@ import java.util.List;
 public class VectorService {
     
     private final VectorRepository vectorRepository;
+    private final VectorIdGenerator vectorIdGenerator;
     
     /**
      * Find top K similar vectors to the given query vector
@@ -35,6 +39,17 @@ public class VectorService {
     }
     
     /**
+     * Get a vector by ID from the specified database
+     * @param id vector ID
+     * @param dbId database identifier
+     * @return Optional containing the vector entry if found, empty otherwise
+     */
+    public Optional<VectorEntry> get(Long id, String dbId) throws VectorRepositoryException {
+        log.debug("Getting vector {} from database {}", id, dbId);
+        return vectorRepository.findById(id, dbId);
+    }
+    
+    /**
      * Add a new vector to the specified database
      * @param vector vector coordinates
      * @param data associated data
@@ -45,12 +60,13 @@ public class VectorService {
         log.debug("Adding vector to database {} with data: {}", dbId, data);
         
         Instant now = Instant.now();
+        VectorId vectorId = vectorIdGenerator.nextId();
         VectorEntry vectorEntry = new VectorEntry(
-            null,           // id - will be generated
-            vector,         // embedding
-            data,           // originalData
-            dbId,           // databaseId
-            now             // createdAt
+            vectorId.numericId(),
+            vector,
+            data,
+            dbId,
+            now
         );
         Long id = vectorRepository.add(vectorEntry, dbId);
         

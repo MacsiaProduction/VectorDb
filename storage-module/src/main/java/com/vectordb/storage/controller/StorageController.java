@@ -9,7 +9,9 @@ import com.vectordb.storage.service.VectorStorageService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/storage")
 @RequiredArgsConstructor
@@ -32,8 +35,12 @@ public class StorageController {
         try {
             Long id = storageService.add(entry, databaseId);
             return ResponseEntity.status(HttpStatus.CREATED).body(id);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid request for database {}: {}", databaseId, e.getMessage());
             return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Failed to add vector to database {}", databaseId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
     
@@ -70,8 +77,12 @@ public class StorageController {
             }
             
             return ResponseEntity.ok(results);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid search query for database {}: {}", query.databaseId(), e.getMessage());
             return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Failed to search in database {}", query.databaseId(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
     
@@ -80,8 +91,12 @@ public class StorageController {
         try {
             DatabaseInfo dbInfo = storageService.createDatabase(request.id(), request.name(), request.dimension());
             return ResponseEntity.status(HttpStatus.CREATED).body(dbInfo);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid database creation request for {}: {}", request.id(), e.getMessage());
             return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Failed to create database {}", request.id(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
     
@@ -117,10 +132,39 @@ public class StorageController {
         return healthy ? ResponseEntity.ok("UP") 
                        : ResponseEntity.status(503).body("DOWN");
     }
+
+    @GetMapping("/admin/vectors/{databaseId}/range")
+    public ResponseEntity<List<VectorEntry>> scanRange(
+            @PathVariable String databaseId,
+            @RequestParam(name = "fromExclusive", defaultValue = "0") long fromExclusive,
+            @RequestParam(name = "toInclusive") long toInclusive,
+            @RequestParam(name = "limit", defaultValue = "1000") int limit) {
+        return ResponseEntity.ok(storageService.scanByRange(databaseId, fromExclusive, toInclusive, limit));
+    }
+
+    @PostMapping("/admin/vectors/{databaseId}/batch")
+    public ResponseEntity<Void> putBatch(
+            @PathVariable String databaseId,
+            @Valid @RequestBody List<VectorEntry> entries) {
+        storageService.putBatch(databaseId, entries);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/admin/vectors/{databaseId}/batch")
+    public ResponseEntity<Integer> deleteBatch(
+            @PathVariable String databaseId,
+            @Valid @RequestBody DeleteBatchRequest request) {
+        int removed = storageService.deleteBatch(databaseId, request.ids());
+        return ResponseEntity.ok(removed);
+    }
     
     public record CreateDatabaseRequest(
         @NotBlank String id, 
         @NotBlank String name,
         @Min(1) int dimension
+    ) {}
+
+    public record DeleteBatchRequest(
+            @NotEmpty List<Long> ids
     ) {}
 }
