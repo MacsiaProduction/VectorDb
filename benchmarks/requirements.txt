@@ -1,0 +1,4 @@
+numpy>=1.24
+rocksdict>=0.3.0
+lmdb>=1.4.0
+redis>=5.0.0
