@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Benchmark: RocksDB vs LMDB vs SQLite vs Redis for VectorEntry data."""
 
-import argparse, os, shutil, sqlite3, struct, tempfile, time, random
+import argparse, os, shutil, sqlite3, struct, tempfile, time, random, gc
 from dataclasses import dataclass
 import numpy as np
 
 RESULTS = []
-WARMUP_READS = 1000
 
 @dataclass
 class VectorEntry:
@@ -36,6 +35,15 @@ def human_size(b: int) -> str:
         b /= 1024
     return f"{b:.1f} TB"
 
+def measure_read(read_fn, entries, iterations=3):
+    """Run read benchmark multiple times, return median"""
+    times = []
+    for _ in range(iterations):
+        t0 = time.perf_counter()
+        read_fn(entries)
+        times.append(time.perf_counter() - t0)
+    return sorted(times)[len(times)//2]
+
 # ── RocksDB ──────────────────────────────────────────────────────────────────
 def bench_rocksdb(entries, tmp):
     try:
@@ -49,16 +57,14 @@ def bench_rocksdb(entries, tmp):
     for e in entries: db[struct.pack("<q", e.id)] = e.serialize()
     db.flush()
     write_sec = time.perf_counter() - t0
-    db.close()
+    
     size = dir_size(path)
-
-    db = Rdict(path)
-    # warmup
-    for i in random.sample(range(len(entries)), min(WARMUP_READS, len(entries))):
-        _ = db[struct.pack("<q", entries[i].id)]
-    t0 = time.perf_counter()
-    for e in entries: _ = db[struct.pack("<q", e.id)]
-    read_sec = time.perf_counter() - t0
+    
+    # Read WITHOUT reopening (fair comparison with LMDB)
+    def read_all(entries):
+        for e in entries: _ = db[struct.pack("<q", e.id)]
+    
+    read_sec = measure_read(read_all, entries)
     db.close()
     RESULTS.append(("RocksDB", write_sec, read_sec, size))
 
@@ -80,14 +86,11 @@ def bench_lmdb(entries, tmp):
     env.sync()
     size = dir_size(path)
 
-    # warmup
-    with env.begin() as txn:
-        for i in random.sample(range(len(entries)), min(WARMUP_READS, len(entries))):
-            _ = txn.get(struct.pack("<q", entries[i].id))
-    t0 = time.perf_counter()
-    with env.begin() as txn:
-        for e in entries: _ = txn.get(struct.pack("<q", e.id))
-    read_sec = time.perf_counter() - t0
+    def read_all(entries):
+        with env.begin() as txn:
+            for e in entries: _ = txn.get(struct.pack("<q", e.id))
+    
+    read_sec = measure_read(read_all, entries)
     env.close()
     RESULTS.append(("LMDB", write_sec, read_sec, size))
 
@@ -95,26 +98,23 @@ def bench_lmdb(entries, tmp):
 def bench_sqlite(entries, tmp):
     path = os.path.join(tmp, "sqlite.db")
     conn = sqlite3.connect(path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("CREATE TABLE vectors (id INTEGER PRIMARY KEY, data BLOB)")
 
     t0 = time.perf_counter()
     conn.executemany("INSERT INTO vectors VALUES (?, ?)", [(e.id, e.serialize()) for e in entries])
     conn.commit()
     write_sec = time.perf_counter() - t0
-    conn.close()
     size = os.path.getsize(path)
 
-    conn = sqlite3.connect(path)
     cur = conn.cursor()
-    # warmup
-    for i in random.sample(range(len(entries)), min(WARMUP_READS, len(entries))):
-        cur.execute("SELECT data FROM vectors WHERE id=?", (entries[i].id,))
-        cur.fetchone()
-    t0 = time.perf_counter()
-    for e in entries:
-        cur.execute("SELECT data FROM vectors WHERE id=?", (e.id,))
-        cur.fetchone()
-    read_sec = time.perf_counter() - t0
+    def read_all(entries):
+        for e in entries:
+            cur.execute("SELECT data FROM vectors WHERE id=?", (e.id,))
+            cur.fetchone()
+    
+    read_sec = measure_read(read_all, entries)
     conn.close()
     RESULTS.append(("SQLite", write_sec, read_sec, size))
 
@@ -136,18 +136,12 @@ def bench_redis(entries, url):
         info = r.info("memory")
         size = info.get("used_memory_dataset", info.get("used_memory", 0))
 
-        # warmup
-        pipe = r.pipeline()
-        for i in random.sample(range(len(entries)), min(WARMUP_READS, len(entries))):
-            pipe.get(f"{key_prefix}{entries[i].id}")
-        pipe.execute()
+        def read_all(entries):
+            pipe = r.pipeline()
+            for e in entries: pipe.get(f"{key_prefix}{e.id}")
+            pipe.execute()
 
-        t0 = time.perf_counter()
-        pipe = r.pipeline()
-        for e in entries: pipe.get(f"{key_prefix}{e.id}")
-        pipe.execute()
-        read_sec = time.perf_counter() - t0
-
+        read_sec = measure_read(read_all, entries)
         r.flushdb()
         RESULTS.append(("Redis", write_sec, read_sec, size))
     except Exception as e:
@@ -157,12 +151,17 @@ def bench_redis(entries, url):
 def run_single(n, dim, redis_url, no_redis):
     global RESULTS
     RESULTS = []
+    gc.collect()
+    
     entries = generate_entries(n, dim)
     tmp = tempfile.mkdtemp(prefix="vbench_")
     try:
         bench_rocksdb(entries, tmp)
+        gc.collect()
         bench_lmdb(entries, tmp)
+        gc.collect()
         bench_sqlite(entries, tmp)
+        gc.collect()
         if not no_redis: bench_redis(entries, redis_url)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
