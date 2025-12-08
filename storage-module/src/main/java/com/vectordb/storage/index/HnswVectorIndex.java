@@ -2,8 +2,8 @@ package com.vectordb.storage.index;
 
 import com.github.jelmerk.hnswlib.core.DistanceFunction;
 import com.github.jelmerk.hnswlib.core.DistanceFunctions;
-import com.github.jelmerk.hnswlib.core.SearchResult;
 import com.github.jelmerk.hnswlib.core.hnsw.HnswIndex;
+import com.vectordb.common.model.SearchResult;
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.storage.similarity.VectorSimilarity;
 import lombok.extern.slf4j.Slf4j;
@@ -49,21 +49,30 @@ public class HnswVectorIndex implements VectorIndex {
     private static class DatabaseIndex {
         /** Индекс построен */
         boolean isBuilt = false;
-        
+
         /** Размерность векторов (-1 если не определена) */
         int dimension = -1;
-        
+
         /** Буфер векторов до построения индекса */
         List<VectorEntry> vectorBuffer = new ArrayList<>();
-        
-        /** HNSW индекс для быстрого поиска */
+
+        /** PRIMARY HNSW индекс для быстрого поиска */
         HnswIndex<Long, float[], VectorEntry, Float> hnswIndex;
-        
-        /** Маппинг ID → VectorEntry */
+
+        /** Маппинг ID → VectorEntry для primary данных */
         Map<Long, VectorEntry> idToEntry = new HashMap<>();
-        
-        /** Удалённые ID (мягкое удаление) */
+
+        /** Удалённые ID primary данных (мягкое удаление) */
         Set<Long> deletedIds = new HashSet<>();
+
+        /** REPLICA индексы: sourceShardId -> HNSW индекс */
+        Map<String, HnswIndex<Long, float[], VectorEntry, Float>> replicaHnswIndices = new HashMap<>();
+
+        /** REPLICA маппинги: sourceShardId -> (id -> entry) */
+        Map<String, Map<Long, VectorEntry>> replicaIdToEntry = new HashMap<>();
+
+        /** Удалённые ID реплик: sourceShardId -> deletedIds */
+        Map<String, Set<Long>> replicaDeletedIds = new HashMap<>();
     }
     
     private final Map<String, DatabaseIndex> databaseIndices = new ConcurrentHashMap<>();
@@ -160,6 +169,158 @@ public class HnswVectorIndex implements VectorIndex {
         }
     }
     
+    /**
+     * Добавить вектор-реплику в индекс
+     */
+    public void addReplica(VectorEntry vector, String databaseId, String sourceShardId) {
+        lock.writeLock().lock();
+        try {
+            DatabaseIndex dbIndex = getOrCreateDatabaseIndex(databaseId);
+
+            // Получаем или создаем replica индекс для этого sourceShardId
+            HnswIndex<Long, float[], VectorEntry, Float> replicaIndex =
+                dbIndex.replicaHnswIndices.computeIfAbsent(sourceShardId, _ -> {
+                    DistanceFunction<float[], Float> distanceFunction = createDistanceFunction();
+                    return HnswIndex.newBuilder(dbIndex.dimension, distanceFunction, maxElements)
+                        .withM(m).withEfConstruction(efConstruction).withEf(efSearch).build();
+                });
+
+            // Добавляем в replica индекс
+            replicaIndex.add(vector);
+
+            // Сохраняем в replica маппинг
+            dbIndex.replicaIdToEntry.computeIfAbsent(sourceShardId, _ -> new HashMap<>())
+                .put(vector.id(), vector);
+
+            log.debug("Added replica vector {} to index for database {} from shard {}",
+                vector.id(), databaseId, sourceShardId);
+
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Удалить вектор-реплику из индекса
+     */
+    public boolean removeReplica(Long vectorId, String databaseId, String sourceShardId) {
+        lock.writeLock().lock();
+        try {
+            DatabaseIndex dbIndex = databaseIndices.get(databaseId);
+            if (dbIndex == null) {
+                return false;
+            }
+
+            HnswIndex<Long, float[], VectorEntry, Float> replicaIndex =
+                dbIndex.replicaHnswIndices.get(sourceShardId);
+
+            if (replicaIndex == null) {
+                return false;
+            }
+
+            // Мягкое удаление для реплик
+            dbIndex.replicaDeletedIds.computeIfAbsent(sourceShardId, _ -> new HashSet<>())
+                .add(vectorId);
+
+            log.debug("Marked replica vector {} as deleted in index for database {} from shard {}",
+                vectorId, databaseId, sourceShardId);
+            return true;
+
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Поиск в репликах конкретного шарда
+     */
+    public List<SearchResult> searchReplicas(float[] queryVector, int k, String databaseId, String sourceShardId) {
+        lock.readLock().lock();
+        try {
+            DatabaseIndex dbIndex = databaseIndices.get(databaseId);
+            if (dbIndex == null || !dbIndex.isBuilt) {
+                return List.of();
+            }
+
+            HnswIndex<Long, float[], VectorEntry, Float> replicaIndex =
+                dbIndex.replicaHnswIndices.get(sourceShardId);
+
+            if (replicaIndex == null) {
+                return List.of();
+            }
+
+            if (queryVector.length != dbIndex.dimension) {
+                throw new IllegalArgumentException(
+                    String.format("Query vector dimension mismatch for database %s. Expected: %d, got: %d",
+                        databaseId, dbIndex.dimension, queryVector.length));
+            }
+
+            log.debug("Performing replica HNSW search for k={} on {} indexed vectors in database {} from shard {}",
+                    k, replicaIndex.size(), databaseId, sourceShardId);
+
+            Long tempQueryId = Long.MIN_VALUE + System.nanoTime();
+            VectorEntry queryItem = new VectorEntry(
+                tempQueryId,
+                queryVector,
+                "__query__",
+                databaseId,
+                Instant.EPOCH
+            );
+
+            replicaIndex.add(queryItem);
+
+            try {
+                int searchK = Math.min(k * 2 + 10, replicaIndex.size());
+                List<com.github.jelmerk.hnswlib.core.SearchResult<VectorEntry, Float>> allResults = replicaIndex.findNeighbors(tempQueryId, searchK);
+
+                List<SearchResult> results = new ArrayList<>();
+                Set<Long> deletedIds = dbIndex.replicaDeletedIds.getOrDefault(sourceShardId, Set.of());
+                Map<Long, VectorEntry> idToEntry = dbIndex.replicaIdToEntry.getOrDefault(sourceShardId, Map.of());
+
+                for (com.github.jelmerk.hnswlib.core.SearchResult<VectorEntry, Float> hnswResult : allResults) {
+                    VectorEntry item = hnswResult.item();
+                    Long itemId = item.id();
+
+                    if (itemId.equals(tempQueryId)) {
+                        continue;
+                    }
+
+                    if (deletedIds.contains(itemId)) {
+                        continue;
+                    }
+
+                    VectorEntry entry = idToEntry.get(itemId);
+                    if (entry == null) {
+                        entry = item;
+                    }
+
+                    float distance = hnswResult.distance();
+                    double similarity = distanceToSimilarity(distance);
+                    results.add(new SearchResult(entry, (double)distance, similarity));
+
+                    if (results.size() >= k) {
+                        break;
+                    }
+                }
+
+                log.debug("Replica HNSW search found {} results for database {} from shard {}",
+                    results.size(), databaseId, sourceShardId);
+                return results;
+
+            } finally {
+                try {
+                    replicaIndex.remove(tempQueryId, 0);
+                } catch (Exception e) {
+                    log.warn("Failed to remove temporary query item from replica index for database {}: {}",
+                        databaseId, e.getMessage());
+                }
+            }
+
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     @Override
     public void add(VectorEntry vector, String databaseId) {
         lock.writeLock().lock();
@@ -253,7 +414,7 @@ public class HnswVectorIndex implements VectorIndex {
     }
     
     @Override
-    public List<com.vectordb.common.model.SearchResult> search(float[] queryVector, int k, String databaseId) {
+    public List<SearchResult> search(float[] queryVector, int k, String databaseId) {
         lock.readLock().lock();
         try {
             DatabaseIndex dbIndex = databaseIndices.get(databaseId);
@@ -290,10 +451,10 @@ public class HnswVectorIndex implements VectorIndex {
             
             try {
                 int searchK = Math.min(k * 2 + 10, dbIndex.hnswIndex.size());
-                List<SearchResult<VectorEntry, Float>> allResults = dbIndex.hnswIndex.findNeighbors(tempQueryId, searchK);
-                
-                List<com.vectordb.common.model.SearchResult> results = new ArrayList<>();
-                for (SearchResult<VectorEntry, Float> hnswResult : allResults) {
+                List<com.github.jelmerk.hnswlib.core.SearchResult<VectorEntry, Float>> allResults = dbIndex.hnswIndex.findNeighbors(tempQueryId, searchK);
+
+                List<SearchResult> results = new ArrayList<>();
+                for (com.github.jelmerk.hnswlib.core.SearchResult<VectorEntry, Float> hnswResult : allResults) {
                     VectorEntry item = hnswResult.item();
                     Long itemId = item.id();
                     
@@ -312,7 +473,7 @@ public class HnswVectorIndex implements VectorIndex {
                     
                     float distance = hnswResult.distance();
                     double similarity = distanceToSimilarity(distance);
-                    results.add(new com.vectordb.common.model.SearchResult(entry, (double)distance, similarity));
+                    results.add(new SearchResult(entry, (double)distance, similarity));
                     
                     if (results.size() >= k) {
                         break;
@@ -425,11 +586,27 @@ public class HnswVectorIndex implements VectorIndex {
             if (dbIndex == null) {
                 return 0;
             }
-            
+
+            int primarySize = 0;
             if (!dbIndex.isBuilt || dbIndex.hnswIndex == null) {
-                return dbIndex.vectorBuffer.size();
+                primarySize = dbIndex.vectorBuffer.size();
+            } else {
+                primarySize = dbIndex.hnswIndex.size() - dbIndex.deletedIds.size();
             }
-            return dbIndex.hnswIndex.size() - dbIndex.deletedIds.size();
+
+            // Учитываем размер всех replica индексов
+            int replicaSize = dbIndex.replicaHnswIndices.values().stream()
+                .mapToInt(index -> {
+                    String sourceShardId = dbIndex.replicaHnswIndices.entrySet().stream()
+                        .filter(entry -> entry.getValue() == index)
+                        .map(Map.Entry::getKey)
+                        .findFirst().orElse("");
+                    Set<Long> deleted = dbIndex.replicaDeletedIds.getOrDefault(sourceShardId, Set.of());
+                    return index.size() - deleted.size();
+                })
+                .sum();
+
+            return primarySize + replicaSize;
         } finally {
             lock.readLock().unlock();
         }
@@ -441,13 +618,20 @@ public class HnswVectorIndex implements VectorIndex {
         try {
             DatabaseIndex dbIndex = databaseIndices.get(databaseId);
             if (dbIndex != null) {
+                // Очистка primary индекса
                 dbIndex.hnswIndex = null;
                 dbIndex.idToEntry.clear();
                 dbIndex.deletedIds.clear();
                 dbIndex.isBuilt = false;
                 dbIndex.vectorBuffer.clear();
                 dbIndex.dimension = -1;
-                log.info("Cleared HNSW index for database {}", databaseId);
+
+                // Очистка replica индексов
+                dbIndex.replicaHnswIndices.clear();
+                dbIndex.replicaIdToEntry.clear();
+                dbIndex.replicaDeletedIds.clear();
+
+                log.info("Cleared HNSW index (including replicas) for database {}", databaseId);
             }
         } finally {
             lock.writeLock().unlock();
@@ -529,7 +713,7 @@ public class HnswVectorIndex implements VectorIndex {
     /**
      * Линейный поиск по коллекции векторов (резервный метод)
      */
-    private List<com.vectordb.common.model.SearchResult> linearSearch(float[] queryVector, int k, List<VectorEntry> vectors, String databaseId) {
+    private List<SearchResult> linearSearch(float[] queryVector, int k, List<VectorEntry> vectors, String databaseId) {
         DatabaseIndex dbIndex = databaseIndices.get(databaseId);
         if (dbIndex == null) {
             return List.of();
@@ -542,7 +726,7 @@ public class HnswVectorIndex implements VectorIndex {
                     databaseId, dbIndex.dimension, queryVector.length));
         }
 
-        List<com.vectordb.common.model.SearchResult> results = new ArrayList<>();
+        List<SearchResult> results = new ArrayList<>();
         
         for (VectorEntry vector : vectors) {
             if (vector.dimension() != queryVector.length) {
@@ -551,10 +735,10 @@ public class HnswVectorIndex implements VectorIndex {
             
             float distance = calculateDistance(queryVector, vector.embedding());
             double similarity = distanceToSimilarity(distance);
-            results.add(new com.vectordb.common.model.SearchResult(vector, (double)distance, similarity));
+            results.add(new SearchResult(vector, (double)distance, similarity));
         }
         
-        results.sort(Comparator.comparingDouble(com.vectordb.common.model.SearchResult::distance));
+        results.sort(Comparator.comparingDouble(SearchResult::distance));
         int resultSize = Math.min(k, results.size());
         
         log.debug("Linear search found {} results, returning top {}", results.size(), resultSize);

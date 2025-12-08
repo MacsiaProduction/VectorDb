@@ -22,8 +22,20 @@ public class ShardRouter {
         this.hashService = hashService;
     }
 
-    public ShardInfo routeForWrite(long vectorId) {
+    /*public ShardInfo routeForWrite(long vectorId) {
         return locate(clusterConfigRepository.getWriteRing(), vectorId);
+    }*/
+
+    public List<ShardInfo> routeForWriteWithReplicas(long vectorId) {
+        HashRing writeRing = clusterConfigRepository.getWriteRing();
+        if (writeRing.isEmpty()) {
+            throw new IllegalStateException("No shards available in the cluster");
+        }
+
+        ShardInfo primaryShard = locate(clusterConfigRepository.getWriteRing(), vectorId);
+        ShardInfo replicaShard = writeRing.locateNext(primaryShard.hashKey());
+
+        return List.of(primaryShard, replicaShard);
     }
 
     public List<ShardInfo> readableShards() {

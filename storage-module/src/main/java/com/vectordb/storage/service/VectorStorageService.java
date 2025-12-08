@@ -49,4 +49,16 @@ public interface VectorStorageService {
 
     /** Удалить батч векторов */
     int deleteBatch(String databaseId, List<Long> ids);
+
+    /** Добавить вектор-реплику */
+    Long addReplica(VectorEntry entry, String databaseId, String sourceShardId);
+
+    /** Получить вектор-реплику */
+    Optional<VectorEntry> getReplica(Long id, String databaseId, String sourceShardId);
+
+    /** Удалить вектор-реплику */
+    boolean deleteReplica(Long id, String databaseId, String sourceShardId);
+
+    /** Поиск среди реплик конкретного шарда */
+    List<SearchResult> searchReplicas(SearchQuery query, String sourceShardId);
 }

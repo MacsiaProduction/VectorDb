@@ -19,8 +19,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 @Slf4j
 public class RocksDbStorage implements KeyValueStorage {
-    private static final String VECTOR_CF = "vectors";
-    private static final String DB_INFO_CF = "db_info";
+    private static final String VECTOR_CF = "vectors";           // Primary данные
+    private static final String DB_INFO_CF = "db_info";          // Primary метаданные
+    private static final String VECTOR_REPLICAS_CF = "vector_replicas"; // Replica данные
+    private static final String DB_REPLICAS_CF = "db_replicas";  // Replica метаданные
     
     @Value("${vector-db.storage.data-path:./data}")
     private String dataPath;
@@ -40,7 +42,9 @@ public class RocksDbStorage implements KeyValueStorage {
             List<ColumnFamilyDescriptor> columnFamilyDescriptors = Arrays.asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY),
                 new ColumnFamilyDescriptor(VECTOR_CF.getBytes()),
-                new ColumnFamilyDescriptor(DB_INFO_CF.getBytes())
+                new ColumnFamilyDescriptor(DB_INFO_CF.getBytes()),
+                new ColumnFamilyDescriptor(VECTOR_REPLICAS_CF.getBytes()),
+                new ColumnFamilyDescriptor(DB_REPLICAS_CF.getBytes())
             );
             
             List<ColumnFamilyHandle> handles = new ArrayList<>();
@@ -50,10 +54,12 @@ public class RocksDbStorage implements KeyValueStorage {
                 .setCreateMissingColumnFamilies(true);
             
             rocksDB = RocksDB.open(dbOptions, dbPath.toString(), columnFamilyDescriptors, handles);
-            
+
             columnFamilyHandles.put("default", handles.get(0));
             columnFamilyHandles.put(VECTOR_CF, handles.get(1));
             columnFamilyHandles.put(DB_INFO_CF, handles.get(2));
+            columnFamilyHandles.put(VECTOR_REPLICAS_CF, handles.get(3));
+            columnFamilyHandles.put(DB_REPLICAS_CF, handles.get(4));
             
             log.info("RocksDB initialized at path: {}", dbPath);
             
@@ -163,7 +169,61 @@ public class RocksDbStorage implements KeyValueStorage {
         
         return databases;
     }
-    
+
+    @Override
+    public void putVectorReplica(String databaseId, VectorEntry entry, String sourceShardId) throws Exception {
+        String key = databaseId + ":" + entry.id() + ":" + sourceShardId;
+        byte[] value = objectMapper.writeValueAsBytes(entry);
+        rocksDB.put(columnFamilyHandles.get(VECTOR_REPLICAS_CF), key.getBytes(), value);
+    }
+
+    @Override
+    public Optional<VectorEntry> getVectorReplica(String databaseId, Long id, String sourceShardId) throws Exception {
+        String key = databaseId + ":" + id + ":" + sourceShardId;
+        byte[] value = rocksDB.get(columnFamilyHandles.get(VECTOR_REPLICAS_CF), key.getBytes());
+
+        if (value == null) {
+            return Optional.empty();
+        }
+
+        VectorEntry entry = objectMapper.readValue(value, VectorEntry.class);
+        return Optional.of(entry);
+    }
+
+    @Override
+    public boolean deleteVectorReplica(String databaseId, Long id, String sourceShardId) throws Exception {
+        String key = databaseId + ":" + id + ":" + sourceShardId;
+        byte[] existing = rocksDB.get(columnFamilyHandles.get(VECTOR_REPLICAS_CF), key.getBytes());
+
+        if (existing == null) {
+            return false;
+        }
+
+        rocksDB.delete(columnFamilyHandles.get(VECTOR_REPLICAS_CF), key.getBytes());
+        return true;
+    }
+
+    @Override
+    public List<VectorEntry> getAllVectorReplicas(String databaseId, String sourceShardId) throws Exception {
+        List<VectorEntry> vectors = new ArrayList<>();
+        String prefix = databaseId + ":";
+
+        try (RocksIterator iterator = rocksDB.newIterator(columnFamilyHandles.get(VECTOR_REPLICAS_CF))) {
+            iterator.seekToFirst();
+
+            while (iterator.isValid()) {
+                String key = new String(iterator.key());
+                if (key.startsWith(prefix) && key.endsWith(":" + sourceShardId)) {
+                    VectorEntry entry = objectMapper.readValue(iterator.value(), VectorEntry.class);
+                    vectors.add(entry);
+                }
+                iterator.next();
+            }
+        }
+
+        return vectors;
+    }
+
     @PreDestroy
     public void cleanup() {
         if (rocksDB != null) {

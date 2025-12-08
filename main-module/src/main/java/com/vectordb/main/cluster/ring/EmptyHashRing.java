@@ -17,6 +17,11 @@ enum EmptyHashRing implements HashRing {
     }
 
     @Override
+    public ShardInfo locateNext(long hashKey) {
+        throw new IllegalStateException("Hash ring is empty");
+    }
+
+    @Override
     public List<ShardInfo> shards() {
         return Collections.emptyList();
     }

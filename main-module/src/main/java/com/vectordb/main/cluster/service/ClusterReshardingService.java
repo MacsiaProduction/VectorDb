@@ -6,6 +6,7 @@ import com.vectordb.main.cluster.model.ShardConfig;
 import com.vectordb.main.cluster.model.ShardInfo;
 import com.vectordb.main.cluster.rebalance.ShardRebalancer;
 import com.vectordb.main.cluster.repository.ClusterConfigRepository;
+import com.vectordb.main.cluster.ownership.ShardReplicationService;
 import com.vectordb.main.repository.VectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class ClusterReshardingService {
     private final ShardRebalancer shardRebalancer;
     private final VectorRepository vectorRepository;
     private final ShardedStorageClient shardedStorageClient;
+    private final ShardReplicationService shardReplicationService;
 
     /**
      * Applies a new cluster configuration and triggers resharding if necessary.
@@ -43,6 +45,9 @@ public class ClusterReshardingService {
         Map<String, ShardConfig> newShards = toMap(newConfig.shards());
 
         clusterConfigRepository.updateClusterConfig(newConfig);
+
+        // Обновляем информацию о репликах при изменении конфигурации
+        shardReplicationService.updateOwnership(newConfig);
 
         List<String> addedShardIds = new ArrayList<>();
         for (String shardId : newShards.keySet()) {

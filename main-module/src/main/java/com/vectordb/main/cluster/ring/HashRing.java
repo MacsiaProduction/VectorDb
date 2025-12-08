@@ -15,6 +15,11 @@ public interface HashRing {
     ShardInfo locate(long hash);
 
     /**
+     * Locate next shard responsible for provided hash value.
+     */
+    ShardInfo locateNext(long hashKey);
+
+    /**
      * @return list of shards participating in this ring in hash order.
      */
     List<ShardInfo> shards();
@@ -29,6 +34,8 @@ public interface HashRing {
     static HashRing empty() {
         return EmptyHashRing.INSTANCE;
     }
+
+
 }
 
 

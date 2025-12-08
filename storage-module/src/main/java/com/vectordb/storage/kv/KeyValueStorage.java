@@ -34,4 +34,16 @@ public interface KeyValueStorage {
     
     /** Получить список всех БД */
     List<DatabaseInfo> getAllDatabases() throws Exception;
+
+    /** Реплика: Сохранить вектор-реплику */
+    void putVectorReplica(String databaseId, VectorEntry entry, String sourceShardId) throws Exception;
+
+    /** Реплика: Получить вектор-реплику */
+    Optional<VectorEntry> getVectorReplica(String databaseId, Long id, String sourceShardId) throws Exception;
+
+    /** Реплика: Удалить вектор-реплику */
+    boolean deleteVectorReplica(String databaseId, Long id, String sourceShardId) throws Exception;
+
+    /** Реплика: Получить все векторы-реплики для источника */
+    List<VectorEntry> getAllVectorReplicas(String databaseId, String sourceShardId) throws Exception;
 }

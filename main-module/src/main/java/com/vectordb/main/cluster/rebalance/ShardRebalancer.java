@@ -5,6 +5,7 @@ import com.vectordb.main.client.ShardedStorageClient;
 import com.vectordb.main.client.StorageClient;
 import com.vectordb.main.cluster.hash.HashService;
 import com.vectordb.main.cluster.model.ShardInfo;
+import com.vectordb.main.cluster.ownership.ShardReplicationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,7 @@ public class ShardRebalancer {
 
     private final ShardedStorageClient shardedStorageClient;
     private final HashService hashService;
+    private final ShardReplicationService shardReplicationService;
 
     @Value("${vectordb.rebalancer.batch-size:500}")
     private int batchSize;
@@ -52,6 +54,12 @@ public class ShardRebalancer {
             moved += toMove.size();
             log.info("Moved {} vectors in database {} from {} to {}", toMove.size(), databaseId,
                     sourceShard.shardId(), targetShard.shardId());
+
+            // TODO: После перемещения primary данных нужно:
+            // 1. Определить новые локации реплик для перемещенных векторов
+            // 2. Создать реплики на новых локациях
+            // 3. Удалить старые реплики
+            // Это требует значительных изменений в архитектуре
         }
         log.info("Completed rebalance of database {} (moved {} vectors) from {} to {}", databaseId, moved,
                 sourceShard.shardId(), targetShard.shardId());

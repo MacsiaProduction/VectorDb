@@ -84,4 +84,31 @@ public interface VectorIndex {
      * @param dimension the vector dimension
      */
     void setDimension(int dimension);
+
+    /**
+     * Добавить вектор-реплику в индекс
+     * @param vector вектор-реплика
+     * @param databaseId ID базы данных
+     * @param sourceShardId ID шарда-источника
+     */
+    void addReplica(VectorEntry vector, String databaseId, String sourceShardId);
+
+    /**
+     * Удалить вектор-реплику из индекса
+     * @param vectorId ID вектора
+     * @param databaseId ID базы данных
+     * @param sourceShardId ID шарда-источника
+     * @return true если реплика найдена и удалена
+     */
+    boolean removeReplica(Long vectorId, String databaseId, String sourceShardId);
+
+    /**
+     * Поиск в репликах конкретного шарда
+     * @param queryVector вектор запроса
+     * @param k количество соседей
+     * @param databaseId ID базы данных
+     * @param sourceShardId ID шарда-источника реплик
+     * @return список результатов поиска в репликах
+     */
+    List<SearchResult> searchReplicas(float[] queryVector, int k, String databaseId, String sourceShardId);
 }

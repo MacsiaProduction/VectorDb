@@ -7,9 +7,12 @@ import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.client.ShardedStorageClient;
 import com.vectordb.main.cluster.model.ShardInfo;
 import com.vectordb.main.cluster.router.ShardRouter;
+import com.vectordb.main.cluster.ownership.ShardReplicationService;
+import com.vectordb.main.cluster.health.ShardHealthMonitor;
 import com.vectordb.main.exception.VectorRepositoryException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 
 /**
  * Storage-based implementation of VectorRepository.
@@ -28,54 +32,128 @@ import java.util.concurrent.ExecutionException;
 @Repository
 @RequiredArgsConstructor
 public class StorageVectorRepository implements VectorRepository {
-    
+
     private final ShardedStorageClient shardedStorageClient;
     private final ShardRouter shardRouter;
+    private final ShardReplicationService shardReplicationService;
+    private final ShardHealthMonitor shardHealthMonitor;
+    @org.springframework.beans.factory.annotation.Qualifier("replicationExecutor")
+    private final Executor replicationExecutor; // Для асинхронной записи реплик
     
     @Override
     public List<VectorEntry> getTopKSimilar(float[] vector, int k, String dbId) throws VectorRepositoryException {
         log.debug("Getting top {} similar vectors in database {} via storage", k, dbId);
-        
+
         SearchQuery query = SearchQuery.simple(vector, k, dbId);
-        
+
         try {
             List<SearchResult> aggregated = new ArrayList<>();
-            List<ShardInfo> shards = shardRouter.readableShards();
-            List<CompletableFuture<List<SearchResult>>> futures = shards.stream()
+
+            // 1. Определяем доступные и недоступные шарды
+            List<ShardInfo> allShards = shardRouter.readableShards();
+            List<ShardInfo> availableShards = shardHealthMonitor.getAvailableShards(allShards);
+            List<ShardInfo> unavailableShards = shardHealthMonitor.getUnavailableShards(allShards);
+
+            // 2. ПАРАЛЛЕЛЬНО выполняем два типа поиска:
+
+            // 2a. Поиск среди primary данных доступных шардов
+            List<CompletableFuture<List<SearchResult>>> primaryFutures = availableShards.stream()
                     .map(shard -> shardedStorageClient.getClient(shard).searchVectors(query).toFuture())
                     .toList();
-            for (CompletableFuture<List<SearchResult>> future : futures) {
-                aggregated.addAll(future.get());
+
+            // 2b. Поиск среди реплик недоступных шардов (на доступных шардах)
+            List<CompletableFuture<List<SearchResult>>> replicaFutures = createReplicaSearchFutures(query, unavailableShards, availableShards);
+
+            // 3. Собираем ВСЕ результаты
+            List<CompletableFuture<List<SearchResult>>> allFutures = new ArrayList<>(primaryFutures);
+            allFutures.addAll(replicaFutures);
+
+            for (CompletableFuture<List<SearchResult>> future : allFutures) {
+                try {
+                    List<SearchResult> results = future.get();
+                    aggregated.addAll(results);
+                } catch (Exception e) {
+                    log.warn("Failed to get search results from shard/replica", e);
+                }
             }
+
+            // 4. Финальная агрегация с дедупликацией
             return aggregated.stream()
+                    .distinct() // По ID вектора
                     .sorted(Comparator.comparingDouble(SearchResult::distance))
                     .limit(k)
                     .map(SearchResult::entry)
                     .toList();
+
         } catch (Exception e) {
             log.error("Failed to get similar vectors for database {}: {}", dbId, e.getMessage());
             throw new VectorRepositoryException("Failed to search vectors in database " + dbId, e);
         }
     }
+
+    private List<CompletableFuture<List<SearchResult>>> createReplicaSearchFutures(
+            SearchQuery query,
+            List<ShardInfo> unavailableShards,
+            List<ShardInfo> availableShards) {
+
+        List<CompletableFuture<List<SearchResult>>> futures = new ArrayList<>();
+
+        for (ShardInfo unavailableShard : unavailableShards) {
+            // Находим, на каких доступных шардах хранятся реплики недоступного шарда
+            List<ShardInfo> replicaLocations = findReplicaLocations(unavailableShard, availableShards);
+
+            for (ShardInfo replicaLocation : replicaLocations) {
+                CompletableFuture<List<SearchResult>> future =
+                    shardedStorageClient.getClient(replicaLocation)
+                        .searchReplicasForShard(query, unavailableShard.shardId())
+                        .toFuture();
+                futures.add(future);
+            }
+        }
+
+        return futures;
+    }
+
+    private List<ShardInfo> findReplicaLocations(ShardInfo sourceShard, List<ShardInfo> availableShards) {
+        // Используем ShardOwnership для определения, где хранятся реплики
+        String replicaLocationId = shardReplicationService.getShardOwnership()
+            .getReplicaLocation(sourceShard.shardId());
+
+        return availableShards.stream()
+            .filter(shard -> shard.shardId().equals(replicaLocationId))
+            .toList();
+    }
     
     @Override
     public Optional<VectorEntry> findById(Long id, String dbId) throws VectorRepositoryException {
         log.debug("Finding vector {} in database {} via storage", id, dbId);
-        
+
         List<ShardInfo> allShards = shardRouter.writableShards();
         if (allShards.isEmpty()) {
             throw new VectorRepositoryException("No writable shards configured for database " + dbId);
         }
 
-        ShardInfo primary = shardRouter.routeForWrite(id);
+        // 1. Используем маршрутизацию с репликами для получения P и R
+        List<ShardInfo> targets = shardRouter.routeForWriteWithReplicas(id);
+        ShardInfo primary = targets.get(0);
+        ShardInfo replica = targets.get(1);
 
+        // 2. Формируем список кандидатов для поиска: P, R, затем остальные
         List<ShardInfo> candidates = new ArrayList<>(allShards.size());
         candidates.add(primary);
+        if (!primary.shardId().equals(replica.shardId())) { // Исключаем добавление дважды, если P == R (только 1 шард)
+            candidates.add(replica);
+        }
+
+        // Добавляем остальные шарды (на случай, если вектор "застрял" после ребаланса)
         for (ShardInfo shard : allShards) {
-            if (!shard.shardId().equals(primary.shardId())) {
+            if (!shard.shardId().equals(primary.shardId()) && !shard.shardId().equals(replica.shardId())) {
                 candidates.add(shard);
             }
         }
+
+        VectorEntry foundEntry = null;
+        ShardInfo foundShard = null;
 
         for (ShardInfo shard : candidates) {
             try {
@@ -86,7 +164,9 @@ public class StorageVectorRepository implements VectorRepository {
 
                 if (result != null) {
                     log.debug("Vector {} found in database {} on shard {}", id, dbId, shard.shardId());
-                    return Optional.of(result);
+                    foundEntry = result;
+                    foundShard = shard;
+                    break; // Найдено
                 } else {
                     log.debug("Vector {} not found on shard {} for database {}", id, shard.shardId(), dbId);
                 }
@@ -119,20 +199,66 @@ public class StorageVectorRepository implements VectorRepository {
             }
         }
 
-        log.debug("Vector {} not found on any shard for database {}", id, dbId);
-        return Optional.empty();
+        // 3. Механизм Read Repair
+        if (foundEntry != null && !foundShard.shardId().equals(primary.shardId())) {
+            final VectorEntry entryToRepair = foundEntry;
+            final ShardInfo sourceShard = foundShard;
+
+            // Если вектор найден, но не на первичном шарде (например, на реплике), инициируем repair
+            CompletableFuture.runAsync(() -> {
+                try {
+                    // Реплицируем данные обратно на Primary
+                    shardedStorageClient.getClient(primary)
+                        .addVectorReplica(entryToRepair, dbId, sourceShard.shardId())
+                        .toFuture().get();
+                    log.info("Read Repair: Replicated vector {} from R={} to P={}",
+                            id, sourceShard.shardId(), primary.shardId());
+
+                } catch (Exception repairE) {
+                    log.error("Read Repair failed for vector {} on primary shard {}", id, primary.shardId(), repairE.getCause());
+                }
+            }, replicationExecutor);
+        }
+
+        if (foundEntry == null) {
+            log.debug("Vector {} not found on any shard for database {}", id, dbId);
+        }
+
+        return Optional.ofNullable(foundEntry);
     }
-    
+
     @Override
     public Long add(VectorEntry vectorEntry, String dbId) throws VectorRepositoryException {
         log.debug("Adding vector to database {} via storage", dbId);
-        
+
         try {
-            ShardInfo shard = shardRouter.routeForWrite(vectorEntry.id());
-            return shardedStorageClient.getClient(shard)
+            // 1. Маршрутизация на Primary (P) и Replica (R)
+            List<ShardInfo> targets = shardRouter.routeForWriteWithReplicas(vectorEntry.id());
+            ShardInfo primary = targets.get(0);
+            ShardInfo replica = targets.get(1);
+
+            // 2. Синхронная запись на Primary (P)
+            Long resultId = shardedStorageClient.getClient(primary)
                     .addVector(vectorEntry, dbId)
                     .toFuture()
                     .get();
+
+            // 3. Асинхронная запись на Replica (R)
+            CompletableFuture.runAsync(() -> {
+                try {
+                    // Используем новый метод для репликации
+                    shardedStorageClient.getClient(replica)
+                        .addVectorReplica(vectorEntry, dbId, primary.shardId())
+                        .toFuture().get();
+                    log.debug("Vector {} successfully replicated to shard {}", resultId, replica.shardId());
+                } catch (Exception e) {
+                    // Логируем ошибку, это означает временную или постоянную несогласованность
+                    log.error("Failed to replicate vector {} to shard {}. Data is inconsistent.",
+                            resultId, replica.shardId(), e.getCause());
+                }
+            }, replicationExecutor);
+
+            return resultId;
         } catch (Exception e) {
             log.error("Failed to add vector to database {}: {}", dbId, e.getMessage());
             throw new VectorRepositoryException("Failed to add vector to database " + dbId, e);
@@ -153,13 +279,21 @@ public class StorageVectorRepository implements VectorRepository {
             throw new VectorRepositoryException("No writable shards configured for database " + dbId);
         }
 
-        ShardInfo primary = shardRouter.routeForWrite(id);
+        // 1. Маршрутизация на Primary (P) и Replica (R)
+        List<ShardInfo> targets = shardRouter.routeForWriteWithReplicas(id);
+        ShardInfo primary = targets.get(0);
+        ShardInfo replica = targets.get(1);
 
-        // Сформировать список: primary сначала, потом остальные
+        // 2. Формируем список кандидатов для удаления: P, R, затем остальные
         List<ShardInfo> candidates = new ArrayList<>(allShards.size());
         candidates.add(primary);
+        if (!primary.shardId().equals(replica.shardId())) {
+            candidates.add(replica);
+        }
+
+        // Добавляем остальные шарды (для удаления "застрявших" векторов)
         for (ShardInfo shard : allShards) {
-            if (!shard.shardId().equals(primary.shardId())) {
+            if (!shard.shardId().equals(primary.shardId()) && !shard.shardId().equals(replica.shardId())) {
                 candidates.add(shard);
             }
         }
@@ -176,7 +310,25 @@ public class StorageVectorRepository implements VectorRepository {
                 if (shardDeleted) {
                     log.debug("Vector {} deleted from database {} on shard {}", id, dbId, shard.shardId());
                     deleted = true;
-                    break;
+
+                    // Асинхронное удаление на Реплике, если удаление произошло на Primary
+                    if (shard.shardId().equals(primary.shardId())) {
+                        CompletableFuture.runAsync(() -> {
+                            try {
+                                // Используем новый метод для репликации удаления
+                                shardedStorageClient.getClient(replica)
+                                    .deleteVectorReplica(id, dbId, primary.shardId())
+                                    .toFuture().get();
+                                log.debug("Delete successfully replicated for vector {} to shard {}", id, replica.shardId());
+                            } catch (Exception e) {
+                                log.warn("Failed to replicate delete for vector {} to shard {}", id, replica.shardId(), e.getCause());
+                            }
+                        }, replicationExecutor);
+                    }
+
+                    // Если удаление произошло на Primary или Replica, это успех.
+                    // Break не ставим, чтобы удалить "застрявший" вектор на старых шардах,
+                    // но ставим deleted = true.
                 } else {
                     log.debug("Vector {} not found on shard {} for database {}", id, shard.shardId(), dbId);
                 }

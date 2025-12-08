@@ -256,7 +256,94 @@ public class VectorStorageServiceImpl implements VectorStorageService {
             return false;
         }
     }
-    
+
+    @Override
+    public Long addReplica(VectorEntry entry, String databaseId, String sourceShardId) {
+        try {
+            Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
+            if (dbInfo.isEmpty()) {
+                throw new IllegalArgumentException("Database not found: " + databaseId);
+            }
+
+            if (entry.id() == null) {
+                throw new IllegalArgumentException("Vector ID must be provided");
+            }
+
+            storage.putVectorReplica(databaseId, entry, sourceShardId);
+
+            try {
+                vectorIndex.addReplica(entry, databaseId, sourceShardId);
+            } catch (IllegalStateException e) {
+                if (e.getMessage().contains("Dimension must be set")) {
+                    log.info("Setting dimension for database {} index: {}", databaseId, dbInfo.get().dimension());
+                    vectorIndex.setDimension(dbInfo.get().dimension());
+                    vectorIndex.addReplica(entry, databaseId, sourceShardId);
+                } else {
+                    throw e;
+                }
+            }
+
+            log.debug("Added replica vector {} for database {} from shard {}", entry.id(), databaseId, sourceShardId);
+            return entry.id();
+
+        } catch (Exception e) {
+            log.error("Failed to add replica vector to database {}", databaseId, e);
+            throw new RuntimeException("Failed to add replica vector", e);
+        }
+    }
+
+    @Override
+    public Optional<VectorEntry> getReplica(Long id, String databaseId, String sourceShardId) {
+        try {
+            return storage.getVectorReplica(databaseId, id, sourceShardId);
+        } catch (Exception e) {
+            log.error("Failed to get replica vector {} from database {} for shard {}", id, databaseId, sourceShardId, e);
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public boolean deleteReplica(Long id, String databaseId, String sourceShardId) {
+        try {
+            log.info("Attempting to delete replica vector {} from database {} for shard {}", id, databaseId, sourceShardId);
+
+            boolean deleted = storage.deleteVectorReplica(databaseId, id, sourceShardId);
+            log.info("Storage replica delete result for vector {}: {}", id, deleted);
+
+            if (deleted) {
+                boolean removedFromIndex = vectorIndex.removeReplica(id, databaseId, sourceShardId);
+                log.info("Removed replica vector {} from index for database {} shard {}: {}",
+                    id, databaseId, sourceShardId, removedFromIndex);
+            }
+
+            return deleted;
+        } catch (Exception e) {
+            log.error("Failed to delete replica vector {} from database {} for shard {}", id, databaseId, sourceShardId, e);
+            return false;
+        }
+    }
+
+    @Override
+    public List<SearchResult> searchReplicas(SearchQuery query, String sourceShardId) {
+        try {
+            String databaseId = query.databaseId();
+            if (databaseId == null) {
+                throw new IllegalArgumentException("Database ID is required for replica search");
+            }
+
+            Optional<DatabaseInfo> dbInfo = storage.getDatabaseInfo(databaseId);
+            if (dbInfo.isEmpty()) {
+                throw new IllegalArgumentException("Database not found: " + databaseId);
+            }
+
+            return vectorIndex.searchReplicas(query.embedding(), query.k(), databaseId, sourceShardId);
+
+        } catch (Exception e) {
+            log.error("Failed to search replicas in database {} for shard {}", query.databaseId(), sourceShardId, e);
+            throw new RuntimeException("Replica search failed", e);
+        }
+    }
+
     @Override
     public boolean isHealthy() {
         try {

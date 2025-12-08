@@ -43,6 +43,16 @@ public final class ConsistentHashRing implements HashRing {
     }
 
     @Override
+    public ShardInfo locateNext(long hashKey) {
+        if (entries.isEmpty()) {
+            throw new IllegalStateException("Hash ring is empty");
+        }
+        int idx = binarySearch(hashKey);
+        int next = (idx + 1) % entries.size();
+        return entries.get(next).shard();
+    }
+
+    @Override
     public List<ShardInfo> shards() {
         return shardView;
     }

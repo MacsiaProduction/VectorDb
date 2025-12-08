@@ -157,6 +157,69 @@ public class StorageController {
         int removed = storageService.deleteBatch(databaseId, request.ids());
         return ResponseEntity.ok(removed);
     }
+
+    // Репликация endpoints
+    @PostMapping("/vectors/{databaseId}/replica")
+    public ResponseEntity<Long> addVectorReplica(
+            @PathVariable String databaseId,
+            @RequestParam String sourceShardId,
+            @Valid @RequestBody VectorEntry entry) {
+        try {
+            Long id = storageService.addReplica(entry, databaseId, sourceShardId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(id);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid replica request for database {}: {}", databaseId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Failed to add replica vector to database {}", databaseId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/vectors/{databaseId}/replica/{id}")
+    public ResponseEntity<VectorEntry> getVectorReplica(
+            @PathVariable String databaseId,
+            @PathVariable Long id,
+            @RequestParam String sourceShardId) {
+        return storageService.getReplica(id, databaseId, sourceShardId)
+                           .map(ResponseEntity::ok)
+                           .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/vectors/{databaseId}/replica/{id}")
+    public ResponseEntity<Void> deleteVectorReplica(
+            @PathVariable String databaseId,
+            @PathVariable Long id,
+            @RequestParam String sourceShardId) {
+        boolean deleted = storageService.deleteReplica(id, databaseId, sourceShardId);
+        return deleted ? ResponseEntity.noContent().build()
+                       : ResponseEntity.notFound().build();
+    }
+
+    @PostMapping(value = "/search/replicas/{sourceShardId}")
+    public ResponseEntity<List<SearchResult>> searchReplicas(
+            @Valid @RequestBody SearchQuery query,
+            @PathVariable String sourceShardId,
+            @RequestHeader(value = "Accept", defaultValue = MediaType.APPLICATION_JSON_VALUE) String acceptHeader) {
+        try {
+            List<SearchResult> results = storageService.searchReplicas(query, sourceShardId);
+
+            if (acceptHeader.contains(MediaType.APPLICATION_OCTET_STREAM_VALUE)) {
+                byte[] serialized = searchResultSerializer.serialize(results);
+                return ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .body(null); // Для реплик пока не сериализуем бинарно
+            }
+
+            return ResponseEntity.ok(results);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid replica search query for shard {}: {}", sourceShardId, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Failed to search replicas for shard {}", sourceShardId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
     
     public record CreateDatabaseRequest(
         @NotBlank String id, 

@@ -1,0 +1,29 @@
+server:
+  port: 0  # Random port for tests
+
+spring:
+  application:
+    name: vector-db-main-test
+
+zookeeper:
+  connect-string: localhost:2181
+  session-timeout: 30s
+  connection-timeout: 10s
+  retry:
+    base-sleep: 100ms
+    max-retries: 5
+
+storage-module:
+  connection-timeout: 2000
+  read-timeout: 5000
+
+vectordb:
+  rebalancer:
+    batch-size: 10
+
+logging:
+  level:
+    com.vectordb: DEBUG
+    org.springframework.web: WARN
+    org.apache.zookeeper: WARN
+    org.apache.curator: WARN

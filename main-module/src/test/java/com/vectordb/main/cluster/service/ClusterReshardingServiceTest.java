@@ -6,6 +6,7 @@ import com.vectordb.main.cluster.model.ShardConfig;
 import com.vectordb.main.cluster.model.ShardStatus;
 import com.vectordb.main.cluster.rebalance.ShardRebalancer;
 import com.vectordb.main.cluster.repository.ClusterConfigRepository;
+import com.vectordb.main.cluster.ownership.ShardReplicationService;
 import com.vectordb.main.repository.VectorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +39,9 @@ class ClusterReshardingServiceTest {
     @Mock
     private VectorRepository vectorRepository;
 
+    @Mock
+    private ShardReplicationService shardReplicationService;
+
     private ClusterReshardingService reshardingService;
 
     @BeforeEach
@@ -46,14 +50,15 @@ class ClusterReshardingServiceTest {
                 clusterConfigRepository,
                 shardRebalancer,
                 vectorRepository,
-                null  // shardedStorageClient not needed for this test
+                null,
+                shardReplicationService
         );
     }
 
     @Test
     @DisplayName("Должен обнаружить новый шард и запустить миграцию")
     void shouldDetectNewShardAndStartMigration() throws Exception {
-        // Arrange - старая конфигурация с 2 шардами
+        // старая конфигурация с 2 шардами
         ClusterConfig oldConfig = new ClusterConfig(
                 List.of(
                         new ShardConfig("shard1", "http://storage1:8081", 0L, ShardStatus.ACTIVE),
@@ -76,10 +81,8 @@ class ClusterReshardingServiceTest {
                 new DatabaseInfo("db2", "Database 2", 5, 50, LocalDateTime.now(), LocalDateTime.now())
         ));
 
-        // Act
         reshardingService.applyNewConfiguration(newConfig);
 
-        // Assert
         verify(clusterConfigRepository, times(1)).updateClusterConfig(newConfig);
         verify(vectorRepository, times(1)).getAllDatabases();
         
@@ -92,7 +95,7 @@ class ClusterReshardingServiceTest {
     @Test
     @DisplayName("Не должен запускать миграцию если новых шардов нет")
     void shouldNotStartMigrationIfNoNewShards() throws Exception {
-        // Arrange - конфигурация не изменилась
+        //конфигурация не изменилась
         ClusterConfig config = new ClusterConfig(
                 List.of(
                         new ShardConfig("shard1", "http://storage1:8081", 0L, ShardStatus.ACTIVE),
@@ -102,10 +105,8 @@ class ClusterReshardingServiceTest {
 
         when(clusterConfigRepository.getClusterConfig()).thenReturn(config);
 
-        // Act
         reshardingService.applyNewConfiguration(config);
 
-        // Assert
         verify(clusterConfigRepository, times(1)).updateClusterConfig(config);
         verify(shardRebalancer, never()).rebalance(anyString(), any(), any(), any());
     }
@@ -113,7 +114,6 @@ class ClusterReshardingServiceTest {
     @Test
     @DisplayName("Должен корректно обработать пустой список БД")
     void shouldHandleEmptyDatabaseList() throws Exception {
-        // Arrange
         ClusterConfig oldConfig = new ClusterConfig(
                 List.of(
                         new ShardConfig("shard1", "http://storage1:8081", 0L, ShardStatus.ACTIVE)
@@ -130,10 +130,8 @@ class ClusterReshardingServiceTest {
         when(clusterConfigRepository.getClusterConfig()).thenReturn(oldConfig);
         when(vectorRepository.getAllDatabases()).thenReturn(List.of());
 
-        // Act
         reshardingService.applyNewConfiguration(newConfig);
 
-        // Assert
         verify(clusterConfigRepository, times(1)).updateClusterConfig(newConfig);
         verify(vectorRepository, times(1)).getAllDatabases();
         verify(shardRebalancer, never()).rebalance(anyString(), any(), any(), any());
@@ -142,7 +140,6 @@ class ClusterReshardingServiceTest {
     @Test
     @DisplayName("Должен обновить конфигурацию даже при ошибке получения списка БД")
     void shouldUpdateConfigEvenIfGetDatabasesFails() throws Exception {
-        // Arrange
         ClusterConfig oldConfig = new ClusterConfig(
                 List.of(
                         new ShardConfig("shard1", "http://storage1:8081", 0L, ShardStatus.ACTIVE)
@@ -159,10 +156,9 @@ class ClusterReshardingServiceTest {
         when(clusterConfigRepository.getClusterConfig()).thenReturn(oldConfig);
         when(vectorRepository.getAllDatabases()).thenThrow(new RuntimeException("Connection failed"));
 
-        // Act
         reshardingService.applyNewConfiguration(newConfig);
 
-        // Assert - конфигурация должна быть обновлена
+        //конфигурация должна быть обновлена
         verify(clusterConfigRepository, times(1)).updateClusterConfig(newConfig);
         // Но миграция не должна быть запущена
         verify(shardRebalancer, never()).rebalance(anyString(), any(), any(), any());
@@ -171,7 +167,6 @@ class ClusterReshardingServiceTest {
     @Test
     @DisplayName("Должен запустить миграцию для всех БД при добавлении шарда")
     void shouldStartMigrationForAllDatabases() throws Exception {
-        // Arrange
         ClusterConfig oldConfig = new ClusterConfig(
                 List.of(
                         new ShardConfig("shard1", "http://storage1:8081", 0L, ShardStatus.ACTIVE)
@@ -194,10 +189,8 @@ class ClusterReshardingServiceTest {
         when(clusterConfigRepository.getClusterConfig()).thenReturn(oldConfig);
         when(vectorRepository.getAllDatabases()).thenReturn(databases);
 
-        // Act
         reshardingService.applyNewConfiguration(newConfig);
 
-        // Assert
         ArgumentCaptor<String> dbIdCaptor = ArgumentCaptor.forClass(String.class);
         verify(shardRebalancer, atLeast(3)).rebalance(
                 dbIdCaptor.capture(),
@@ -230,10 +223,8 @@ class ClusterReshardingServiceTest {
 
         when(clusterConfigRepository.getClusterConfig()).thenReturn(oldConfig);
 
-        // Act
         reshardingService.applyNewConfiguration(newConfig);
 
-        // Assert - конфигурация обновлена, но миграция не запущена
         verify(clusterConfigRepository, times(1)).updateClusterConfig(newConfig);
         verify(shardRebalancer, never()).rebalance(anyString(), any(), any(), any());
     }

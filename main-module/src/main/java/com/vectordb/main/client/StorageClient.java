@@ -173,5 +173,103 @@ public class StorageClient {
                 .bodyToMono(Integer.class);
     }
 
+
+    public Mono<Void> replicateVector(VectorEntry entry, String databaseId) {
+        log.debug("Replicating vector {} to database {} via storage service", entry.id(), databaseId);
+
+        return storageWebClient
+                .post()
+                .uri(uriBuilder -> uriBuilder
+                        .path(STORAGE_API_BASE_PATH + "/vectors/{databaseId}")
+                        .queryParam("replica", "true") // Флаг репликации
+                        .build(databaseId))
+                .bodyValue(entry)
+                .retrieve()
+                .toBodilessEntity()
+                .then()
+                .doOnError(error -> log.warn("Failed to replicate vector {} to database {}: {}",
+                        entry.id(), databaseId, error.getMessage()));
+    }
+
+    public Mono<Void> replicateDelete(Long id, String databaseId) {
+        log.debug("Replicating delete for vector {} in database {}", id, databaseId);
+
+        return storageWebClient
+                .delete()
+                .uri(uriBuilder -> uriBuilder
+                        .path(STORAGE_API_BASE_PATH + "/vectors/{databaseId}/{id}")
+                        .queryParam("replica", "true") // Флаг репликации
+                        .build(databaseId, id))
+                .retrieve()
+                .toBodilessEntity()
+                .then()
+                .doOnError(error -> log.warn("Failed to replicate delete for vector {} in database {}: {}",
+                        id, databaseId, error.getMessage()));
+    }
+
+    // Новые методы для работы с репликами
+    public Mono<Long> addVectorReplica(VectorEntry entry, String databaseId, String sourceShardId) {
+        log.debug("Adding replica vector {} to database {} from shard {}", entry.id(), databaseId, sourceShardId);
+
+        return storageWebClient
+                .post()
+                .uri(STORAGE_API_BASE_PATH + "/vectors/{databaseId}/replica?sourceShardId={sourceShardId}",
+                        databaseId, sourceShardId)
+                .bodyValue(entry)
+                .retrieve()
+                .bodyToMono(Long.class)
+                .doOnSuccess(id -> log.debug("Replica vector added with ID: {}", id))
+                .doOnError(error -> log.error("Failed to add replica vector to database {}: {}", databaseId, error.getMessage()));
+    }
+
+    public Mono<VectorEntry> getVectorReplica(Long id, String databaseId, String sourceShardId) {
+        log.debug("Getting replica vector {} from database {} for shard {}", id, databaseId, sourceShardId);
+
+        return storageWebClient
+                .get()
+                .uri(STORAGE_API_BASE_PATH + "/vectors/{databaseId}/replica/{id}?sourceShardId={sourceShardId}",
+                        databaseId, id, sourceShardId)
+                .retrieve()
+                .bodyToMono(VectorEntry.class)
+                .doOnError(WebClientResponseException.NotFound.class,
+                        _ -> log.debug("Replica vector {} not found in database {} for shard {}", id, databaseId, sourceShardId));
+    }
+
+    public Mono<Boolean> deleteVectorReplica(Long id, String databaseId, String sourceShardId) {
+        log.debug("Deleting replica vector {} from database {} for shard {}", id, databaseId, sourceShardId);
+
+        return storageWebClient
+                .delete()
+                .uri(STORAGE_API_BASE_PATH + "/vectors/{databaseId}/replica/{id}?sourceShardId={sourceShardId}",
+                        databaseId, id, sourceShardId)
+                .retrieve()
+                .toBodilessEntity()
+                .map(response -> response.getStatusCode().is2xxSuccessful())
+                .doOnSuccess(deleted -> log.debug("Replica vector {} deletion result: {}", id, deleted));
+    }
+
+    public Mono<List<SearchResult>> searchReplicasForShard(SearchQuery query, String sourceShardId) {
+        log.debug("Searching replicas for shard {} via storage service", sourceShardId);
+
+        return storageWebClient
+                .post()
+                .uri(STORAGE_API_BASE_PATH + "/search/replicas/{sourceShardId}", sourceShardId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_OCTET_STREAM)
+                .bodyValue(query)
+                .retrieve()
+                .bodyToMono(byte[].class)
+                .map(bytes -> {
+                    try {
+                        return searchResultDeserializer.deserialize(bytes);
+                    } catch (Exception e) {
+                        log.error("Failed to deserialize replica search results: {}", e.getMessage());
+                        throw new RuntimeException("Failed to deserialize replica search results", e);
+                    }
+                })
+                .doOnSuccess(results -> log.debug("Deserialized {} replica search results from binary", results.size()))
+                .doOnError(error -> log.error("Failed to search replicas: {}", error.getMessage()));
+    }
+
     public record DeleteBatchRequest(List<Long> ids) {}
 }
