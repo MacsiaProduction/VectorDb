@@ -1,16 +1,13 @@
 #!/bin/bash
-
 # Цвета для вывода
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
-
 # Получаем директорию проекта (родительская директория от скрипта)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-
 # Конфигурация
 MAIN_URL="http://localhost:8080"
 STORAGE1_URL="http://localhost:8081"
@@ -19,10 +16,9 @@ STORAGE3_URL="http://localhost:8083"
 TEST_DB_ID="resharding-test-db"
 DIMENSION=3
 VECTOR_COUNT=50
-
 # Функции для вывода
-print_step() {
-    echo -e "${BLUE}==== $1 ====${NC}"
+print_step(){ 
+	echo -e "${BLUE}==== $1 ====${NC}"
 }
 
 print_success() {
