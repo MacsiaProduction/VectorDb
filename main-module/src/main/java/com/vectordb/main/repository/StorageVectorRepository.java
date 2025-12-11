@@ -12,7 +12,6 @@ import com.vectordb.main.cluster.health.ShardHealthMonitor;
 import com.vectordb.main.exception.VectorRepositoryException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Repository;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -154,6 +153,7 @@ public class StorageVectorRepository implements VectorRepository {
 
         VectorEntry foundEntry = null;
         ShardInfo foundShard = null;
+        boolean hadConnectivityErrors = false;
 
         for (ShardInfo shard : candidates) {
             try {
@@ -178,10 +178,11 @@ public class StorageVectorRepository implements VectorRepository {
                 }
                 log.error("Failed to get vector {} from database {} on shard {}: {}",
                         id, dbId, shard.shardId(), cause.getMessage());
-                throw new VectorRepositoryException(
+                /*throw new VectorRepositoryException(
                         "Failed to get vector " + id + " from database " + dbId + " on shard " + shard.shardId(),
                         cause
-                );
+                );*/
+                continue;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.error("Get operation interrupted for vector {} in database {} on shard {}", id, dbId, shard.shardId(), e);
@@ -196,6 +197,10 @@ public class StorageVectorRepository implements VectorRepository {
                         "Failed to get vector " + id + " from database " + dbId + " on shard " + shard.shardId(),
                         e
                 );
+            }
+            // Если ничего не нашли и были проблемы с доступностью - бросаем исключение
+            if (foundEntry == null && !hadConnectivityErrors) {
+                throw new VectorRepositoryException("Failed to get vector " + id + " from database " + dbId + ": all candidate shards are unavailable");
             }
         }
 

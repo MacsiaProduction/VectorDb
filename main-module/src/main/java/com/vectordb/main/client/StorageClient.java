@@ -207,7 +207,7 @@ public class StorageClient {
                         id, databaseId, error.getMessage()));
     }
 
-    // Новые методы для работы с репликами
+    // Методы для работы с репликами
     public Mono<Long> addVectorReplica(VectorEntry entry, String databaseId, String sourceShardId) {
         log.debug("Adding replica vector {} to database {} from shard {}", entry.id(), databaseId, sourceShardId);
 

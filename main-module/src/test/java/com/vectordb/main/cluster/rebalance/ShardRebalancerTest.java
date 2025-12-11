@@ -3,12 +3,15 @@ package com.vectordb.main.cluster.rebalance;
 import com.vectordb.common.model.VectorEntry;
 import com.vectordb.main.client.ShardedStorageClient;
 import com.vectordb.main.client.StorageClient;
+import com.vectordb.main.cluster.router.ShardRouter;
 import com.vectordb.main.cluster.hash.HashService;
 import com.vectordb.main.cluster.model.ShardInfo;
 import com.vectordb.main.cluster.model.ShardStatus;
 import com.vectordb.main.cluster.ownership.ShardOwnership;
 import com.vectordb.main.cluster.ownership.ShardReplicationService;
 import com.vectordb.main.cluster.repository.ClusterConfigRepository;
+import com.vectordb.main.cluster.health.ShardHealthMonitor;
+import com.vectordb.main.repository.StorageVectorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +23,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Executor;
 
 import reactor.core.publisher.Mono;
 
@@ -35,6 +40,9 @@ class ShardRebalancerTest {
 
     @Mock
     private ShardedStorageClient shardedStorageClient;
+
+    @Mock
+    private ShardRouter shardRouter;
 
     @Mock
     private HashService hashService;
@@ -53,15 +61,17 @@ class ShardRebalancerTest {
 
     @Mock
     private StorageClient targetReplicaClient;
+    
+    @Mock
+    private StorageClient primaryClient;
 
     @Mock
-    private StorageClient sourceClient;
+    private StorageClient replicaClient;
 
     @Mock
-    private StorageClient targetClient;
+    private ShardHealthMonitor shardHealthMonitor;
 
     private ShardRebalancer shardRebalancer;
-
     private ShardInfo sourceShard;
     private ShardInfo targetShard;
     private ShardInfo sourceReplicaShard;
@@ -253,6 +263,66 @@ class ShardRebalancerTest {
         // Проверяем, что несмотря на ошибку добавления, удаление все равно произошло
         verify(sourceReplicaClient).deleteVectorReplica(1L, databaseId, "shard1");
     }
+
+    @Test
+    @DisplayName("Должен читать данные с реплики при недоступности primary шарда")
+    void shouldReadFromReplicaWhenPrimaryShardIsUnavailable() throws Exception {
+        String databaseId = "test-db";
+        Long vectorId = 42L;
+
+        // Используем executor, который выполняет задачи синхронно для тестирования
+        Executor testExecutor = Runnable::run;
+
+        StorageVectorRepository repository = new StorageVectorRepository(
+                shardedStorageClient,
+                shardRouter,
+                shardReplicationService,
+                shardHealthMonitor,
+                testExecutor
+        );
+
+        ShardInfo primaryShard = new ShardInfo("shard1", URI.create("http://localhost:8080"), 1000L, ShardStatus.ACTIVE);
+        ShardInfo replicaShard = new ShardInfo("shard2", URI.create("http://localhost:8081"), 2000L, ShardStatus.ACTIVE);
+        VectorEntry testVector = createTestVectorEntry(42L, "test-db");
+
+        // Настраиваем маршрутизацию: primary shard1, replica shard2
+        when(shardRouter.writableShards()).thenReturn(List.of(primaryShard, replicaShard));
+        when(shardRouter.routeForWriteWithReplicas(vectorId)).thenReturn(List.of(primaryShard, replicaShard));
+
+        // Настраиваем клиентов
+        when(shardedStorageClient.getClient(primaryShard)).thenReturn(primaryClient);
+        when(shardedStorageClient.getClient(replicaShard)).thenReturn(replicaClient);
+
+        // Primary шард недоступен (бросает исключение при чтении)
+        when(primaryClient.getVector(vectorId, databaseId))
+                .thenReturn(Mono.error(new RuntimeException("Primary shard is unavailable")));
+
+        // Реплика доступна и возвращает данные
+        when(replicaClient.getVector(vectorId, databaseId))
+                .thenReturn(Mono.just(testVector));
+
+        // Настраиваем Read Repair
+        when(primaryClient.addVectorReplica(any(VectorEntry.class), eq(databaseId), eq(replicaShard.shardId())))
+                .thenReturn(Mono.just(1L));
+
+        // Вызываем метод чтения
+        Optional<VectorEntry> result = repository.findById(vectorId, databaseId);
+
+        // Проверяем, что данные получены
+        assertThat(result).isPresent();
+        assertThat(result.get().id()).isEqualTo(vectorId);
+        assertThat(result.get().databaseId()).isEqualTo(databaseId);
+
+        // Проверяем, что был запрос к primary шарду (и он упал)
+        verify(primaryClient).getVector(vectorId, databaseId);
+
+        // Проверяем, что был запрос к реплике
+        verify(replicaClient).getVector(vectorId, databaseId);
+
+        // Проверяем, что был инициирован Read Repair (репликация обратно на primary)
+        verify(primaryClient).addVectorReplica(eq(testVector), eq(databaseId), eq(replicaShard.shardId()));
+    }
+
 
     private VectorEntry createTestVectorEntry(Long id, String databaseId) {
         float[] vector = new float[128];

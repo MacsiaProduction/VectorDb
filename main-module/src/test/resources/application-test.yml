@@ -27,3 +27,4 @@ logging:
     org.springframework.web: WARN
     org.apache.zookeeper: WARN
     org.apache.curator: WARN
+

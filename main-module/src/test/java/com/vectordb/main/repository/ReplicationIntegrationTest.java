@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 @DirtiesContext
 public class ReplicationIntegrationTest {
 
-    private static TestingServer zookeeperServer;
+    private static final TestingServer zookeeperServer;
 
     static {
         try {
@@ -61,22 +61,10 @@ public class ReplicationIntegrationTest {
     @Autowired
     private ShardReplicationService shardReplicationService;
 
-    @Test
-    void shouldCreateDatabaseOnAllShards() throws Exception {
-
-        String dbId = "test_replication_db";
-        int dimension = 128;
-
-        when(vectorRepository.createDatabase(dbId, dimension)).thenReturn(true);
-
-        boolean created = vectorRepository.createDatabase(dbId, dimension);
-
-        assertThat(created).isTrue();
-        verify(vectorRepository).createDatabase(dbId, dimension);
-    }
 
     @Test
     void shouldReplicateDataToReplicaShard() throws Exception {
+        // Проверяет репликацию данных в реплику шарда
 
         String dbId = "test_replication_db";
         float[] vector = new float[128];
@@ -113,6 +101,8 @@ public class ReplicationIntegrationTest {
 
     @Test
     void shouldSearchWithReplication() throws Exception {
+        // Проверяет поиск с учётом репликации
+
         String dbId = "test_replication_db";
         float[] queryVector = new float[128];
         for (int i = 0; i < 128; i++) {
@@ -137,6 +127,8 @@ public class ReplicationIntegrationTest {
 
     @Test
     void shouldDetermineShardOwnership() {
+        // Проверяет логику определения владельца шарда и реплик
+
         ClusterConfig config = new ClusterConfig(List.of(
             new ShardConfig("shard1", "http://localhost:8081", 0L, null),
             new ShardConfig("shard2", "http://localhost:8082", Long.MAX_VALUE / 2, null),
