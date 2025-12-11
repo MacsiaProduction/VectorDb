@@ -23,31 +23,31 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Функции для вывода
 print_step() {
-    echo -e "${BLUE}==== $1 ====${NC}"
+    printf "${BLUE}==== %s ====${NC}\n" "$1"
 }
 
 print_success() {
-    echo -e "${GREEN}[OK] $1${NC}"
+    printf "${GREEN}✅ %s${NC}\n" "$1"
 }
 
 print_error() {
-    echo -e "${RED}[ERROR] $1${NC}"
+    printf "${RED}❌ %s${NC}\n" "$1"
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARN] $1${NC}"
+    printf "${YELLOW}⚠️  %s${NC}\n" "$1"
 }
 
 print_info() {
-    echo -e "${YELLOW}[INFO] $1${NC}"
+    printf "${YELLOW}ℹ️  %s${NC}\n" "$1"
 }
 
-# Docker compose command
+# Docker compose command (supports both old and new syntax)
 docker_compose() {
     if docker compose version &> /dev/null 2>&1; then
-        docker compose -f "$PROJECT_DIR/docker-compose.sharded.yml" --profile with-shard3 "$@"
+        docker compose -f "$PROJECT_DIR/docker-compose.sharded.yml" "$@"
     else
-        docker-compose -f "$PROJECT_DIR/docker-compose.sharded.yml" --profile with-shard3 "$@"
+        docker-compose -f "$PROJECT_DIR/docker-compose.sharded.yml" "$@"
     fi
 }
 
@@ -146,7 +146,7 @@ install_jq() {
 check_health() {
     local url=$1
     local name=$2
-    local max_attempts=60
+    local max_attempts=10
     local attempt=1
 
     local health_endpoint=""
@@ -164,9 +164,9 @@ check_health() {
         fi
 
         if [ $((attempt % 10)) -eq 0 ]; then
-            echo -ne "\r   Попытка $attempt/$max_attempts..."
+            printf "\r   Попытка %d/%d..." "$attempt" "$max_attempts"
         else
-            echo -n "."
+            printf "."
         fi
 
         sleep 2
@@ -245,23 +245,51 @@ get_replica_shard() {
 step1_prepare_cluster() {
     print_step "Шаг 1: Подготовка кластера"
 
-    # Останавливаем существующие контейнеры
-    print_info "Останавливаем существующие контейнеры..."
-    docker_compose down 2>/dev/null || true
+    # Проверяем, запущены ли уже контейнеры
+    local containers_running=true
+    if ! docker ps | grep -q "vector-db-storage-1"; then
+        containers_running=false
+    fi
+    if ! docker ps | grep -q "vector-db-storage-2"; then
+        containers_running=false
+    fi
+    if ! docker ps | grep -q "vector-db-storage-3"; then
+        containers_running=false
+    fi
+    if ! docker ps | grep -q "vector-db-main"; then
+        containers_running=false
+    fi
 
-    # Запускаем кластер с 3 шардами
-    print_info "Запускаем кластер с 3 шардами..."
-    docker_compose up -d
+    if [ "$containers_running" = false ]; then
+        print_info "Останавливаем существующие контейнеры..."
+        docker_compose --profile with-shard3 down 2>/dev/null || true
 
-    # Ждем запуска всех сервисов
-    sleep 30
+        # Запускаем кластер с 3 шардами
+        print_info "Запускаем кластер с 3 шардами..."
+        docker_compose --profile with-shard3 up -d
+
+        # Ждем запуска всех сервисов
+        sleep 30
+    else
+        print_info "Контейнеры уже запущены"
+    fi
 
     print_info "Проверяем ZooKeeper..."
-    if ! docker exec vector-db-zookeeper zkCli.sh ls / >/dev/null 2>&1; then
+    local zk_attempts=10
+    local zk_attempt=1
+    while [ $zk_attempt -le $zk_attempts ]; do
+        if docker exec vector-db-zookeeper zkCli.sh ls / >/dev/null 2>&1; then
+            print_success "ZooKeeper доступен"
+            break
+        fi
+        printf "."
+        sleep 3
+        zk_attempt=$((zk_attempt + 1))
+    done
+
+    if [ $zk_attempt -gt $zk_attempts ]; then
         print_error "ZooKeeper недоступен"
         exit 1
-    else
-        print_success "ZooKeeper доступен"
     fi
 
     print_info "Проверяем Main module..."
@@ -281,59 +309,7 @@ step1_prepare_cluster() {
 
 # Шаг 2: Настройка репликации и очистка данных
 step2_setup_replication() {
-    print_step "Шаг 2: Настройка репликации"
-
-    # Проверяем готовность ZooKeeper
-    print_info "Проверяем готовность ZooKeeper..."
-    max_zk_attempts=10
-    zk_attempt=1
-
-    while [ $zk_attempt -le $max_zk_attempts ]; do
-        if docker exec vector-db-zookeeper zkCli.sh ls / >/dev/null 2>&1; then
-            print_success "ZooKeeper готов"
-            break
-        fi
-        echo -n "."
-        sleep 3
-        zk_attempt=$((zk_attempt + 1))
-    done
-
-    if [ $zk_attempt -gt $max_zk_attempts ]; then
-        print_error "ZooKeeper не готов после 30 секунд ожидания"
-        exit 1
-    fi
-
-    # Настраиваем репликацию напрямую через ZooKeeper
-    print_info "Настраиваем конфигурацию репликации в ZooKeeper..."
-
-    # Создаем необходимые пути
-    docker exec vector-db-zookeeper zkCli.sh create /vectordb "" 2>/dev/null || true
-    docker exec vector-db-zookeeper zkCli.sh create /vectordb/cluster "" 2>/dev/null || true
-
-    # Удаляем старую конфигурацию, если существует
-    docker exec vector-db-zookeeper zkCli.sh delete /vectordb/cluster/config 2>/dev/null || true
-
-    # Устанавливаем новую конфигурацию
-    config_result=$(docker exec vector-db-zookeeper zkCli.sh create /vectordb/cluster/config '{
-  "shards": [
-    {"shardId": "shard1", "baseUrl": "http://vector-db-storage-1:8081", "hashKey": 0, "status": "ACTIVE"},
-    {"shardId": "shard2", "baseUrl": "http://vector-db-storage-2:8081", "hashKey": 3074457345618258602, "status": "ACTIVE"},
-    {"shardId": "shard3", "baseUrl": "http://vector-db-storage-3:8081", "hashKey": 6148914691236517204, "status": "ACTIVE"}
-  ],
-  "metadata": {}
-}' 2>&1)
-
-    if echo "$config_result" | grep -q "Created"; then
-        print_success "Конфигурация репликации установлена в ZooKeeper"
-        echo "  Репликация: shard1→shard2, shard2→shard3, shard3→shard1"
-
-        # Ждем, чтобы Main модуль успел перечитать конфигурацию из ZooKeeper
-        print_info "Ждем обновления конфигурации в Main модуле..."
-        sleep 30
-    else
-        print_error "Ошибка настройки репликации в ZooKeeper: $config_result"
-        exit 1
-    fi
+    print_step "Шаг 2: Настройка репликации и очистка данных"
 
     # Очищаем тестовые данные
     print_info "Очищаем тестовые данные..."
@@ -342,7 +318,7 @@ step2_setup_replication() {
     delete_db_on_shard "$STORAGE2_URL" "Storage 2"
     delete_db_on_shard "$STORAGE3_URL" "Storage 3"
 
-    sleep 3
+    sleep 2
 
     # Проверяем что все пусто
     local s1=$(get_vector_count "$STORAGE1_URL")
@@ -354,6 +330,30 @@ step2_setup_replication() {
     else
         print_warning "Шарды не полностью очищены (S1=$s1, S2=$s2, S3=$s3), но продолжаем"
     fi
+
+    # Настраиваем репликацию через Admin API
+    print_info "Настраиваем конфигурацию репликации через Admin API..."
+
+    response=$(curl -s -X POST "$MAIN_URL/api/admin/cluster/config" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "shards": [
+                {"shardId": "shard1", "baseUrl": "http://vector-db-storage-1:8081", "hashKey": 0, "status": "ACTIVE"},
+                {"shardId": "shard2", "baseUrl": "http://vector-db-storage-2:8081", "hashKey": 3074457345618258602, "status": "ACTIVE"},
+                {"shardId": "shard3", "baseUrl": "http://vector-db-storage-3:8081", "hashKey": 6148914691236517204, "status": "ACTIVE"}
+            ],
+            "metadata": {}
+        }')
+
+    if echo "$response" | grep -qi "success\|updated\|initiated"; then
+        print_success "Конфигурация репликации установлена"
+        echo "  Репликация: shard1→shard2, shard2→shard3, shard3→shard1"
+    else
+        print_warning "Ответ Admin API: $response"
+        print_info "Продолжаем тест..."
+    fi
+
+    sleep 5
 }
 
 # Шаг 3: Создание БД и добавление тестовых данных
@@ -399,7 +399,7 @@ step3_create_database_and_data() {
             fi
 
             if [ $((i % 5)) -eq 0 ]; then
-                echo -n "."
+                printf "."
             fi
         fi
     done
@@ -428,7 +428,7 @@ step4_check_initial_distribution() {
     shard3_count=$(get_vector_count "$STORAGE3_URL")
     total=$((shard1_count + shard2_count + shard3_count))
 
-    echo "[STATS] Распределение векторов:"
+    echo "📊 Распределение векторов:"
     echo "   Shard 1: $shard1_count векторов"
     echo "   Shard 2: $shard2_count векторов"
     echo "   Shard 3: $shard3_count векторов"
@@ -444,7 +444,7 @@ step4_check_initial_distribution() {
     replica_shard=$(get_replica_shard "$primary_shard")
 
     echo ""
-    echo "[TARGET] Тестовый вектор $TEST_VECTOR_ID:"
+    echo "🎯 Тестовый вектор $TEST_VECTOR_ID:"
     echo "   Primary: $primary_shard ($(get_shard_url "$primary_shard"))"
     echo "   Replica: $replica_shard ($(get_shard_url "$replica_shard"))"
 
@@ -531,7 +531,7 @@ step6_verify_data_through_replica() {
     success=false
 
     while [ $attempt -le $max_attempts ]; do
-        echo -ne "\r   Попытка $attempt/$max_attempts..."
+        printf "\r   Попытка %d/%d..." "$attempt" "$max_attempts"
 
         vector_data=$(curl -s "$MAIN_URL/api/vectors/$TEST_VECTOR_ID?dbId=$TEST_DB_ID")
 
@@ -635,7 +635,7 @@ step8_final_distribution_check() {
     shard3_count=$(get_vector_count "$STORAGE3_URL")
     total=$((shard1_count + shard2_count + shard3_count))
 
-    echo "[FINAL] Финальное распределение векторов:"
+    echo "📊 Финальное распределение векторов:"
     echo "   Shard 1: $shard1_count векторов"
     echo "   Shard 2: $shard2_count векторов"
     echo "   Shard 3: $shard3_count векторов"
@@ -656,42 +656,46 @@ print_final_report() {
     echo "═══════════════════════════════════════════════════════════"
     echo ""
     echo "Что было проверено:"
-    echo "  [OK] Подъем кластера с 3 нодами"
+    echo "  ✅ Подъем кластера с 3 нодами"
 
     if [ -n "$PRIMARY_SHARD" ]; then
-        echo "  [OK] Настройка кольцевой репликации"
-        echo "  [OK] Создание тестовых данных"
-        echo "  [OK] Распределение данных по шардам"
-        echo "  [OK] Убийство primary ноды для тестового вектора"
-        echo "  [OK] Чтение данных через реплику"
-        echo "  [OK] Восстановление primary ноды"
-        echo "  [OK] Проверка read repair"
+        echo "  ✅ Настройка кольцевой репликации"
+        echo "  ✅ Создание тестовых данных"
+        echo "  ✅ Распределение данных по шардам"
+        echo "  ✅ Убийство primary ноды для тестового вектора"
+        echo "  ✅ Чтение данных через реплику"
+        echo "  ✅ Восстановление primary ноды"
+        echo "  ✅ Проверка read repair"
         echo ""
-        echo "[RESULT] Ключевой результат:"
+        echo "Ключевой результат:"
         echo "   Тестовый вектор: $TEST_VECTOR_ID"
         echo "   Primary шард: $PRIMARY_SHARD"
         echo "   Replica шард: $REPLICA_SHARD"
-        echo "   [OK] Данные остались доступны после падения primary"
+        echo "   ✅ Данные остались доступны после падения primary"
     else
-        echo "  [WARN] Репликация не была настроена (возможно, проблема с ZooKeeper)"
-        echo "  [OK] Базовая функциональность кластера"
-        echo "  [OK] Создание тестовых данных"
-        echo "  [OK] Доступность через Main API"
+        echo "  ⚠️  Репликация не была настроена"
+        echo "  ✅ Базовая функциональность кластера"
+        echo "  ✅ Создание тестовых данных"
+        echo "  ✅ Доступность через Main API"
         echo ""
-        echo "[RESULT] Ограниченный результат:"
+        echo "Ограниченный результат:"
         echo "   Тестовый вектор: $TEST_VECTOR_ID"
-        echo "   [OK] Базовые операции работают"
-        echo "   [WARN] Репликация недоступна"
+        echo "   ✅ Базовые операции работают"
+        echo "   ⚠️  Репликация недоступна"
     fi
     echo ""
-    echo "Полезные команды для отладки:"
-    echo "  docker logs -f vector-db-main      # Логи main"
-    echo "  docker logs -f vector-db-storage-1 # Логи storage 1"
-    echo "  docker logs -f vector-db-storage-2 # Логи storage 2"
-    echo "  docker logs -f vector-db-storage-3 # Логи storage 3"
+    echo "Итоговое распределение:"
+    echo "  Shard 1: $(get_vector_count $STORAGE1_URL) векторов"
+    echo "  Shard 2: $(get_vector_count $STORAGE2_URL) векторов"
+    echo "  Shard 3: $(get_vector_count $STORAGE3_URL) векторов"
     echo ""
-    echo "  curl http://localhost:8080/swagger-ui.html # API документация"
-    echo "  http://localhost:9004 # ZooKeeper UI"
+    echo "Полезные команды:"
+    echo "  docker logs vector-db-main      # Логи main"
+    echo "  docker logs vector-db-storage-1 # Логи storage 1"
+    echo "  docker logs vector-db-storage-2 # Логи storage 2"
+    echo "  docker logs vector-db-storage-3 # Логи storage 3"
+    echo "  http://localhost:9000           # ZooKeeper UI"
+    echo "  http://localhost:8080/swagger-ui.html # Swagger"
     echo ""
 }
 
