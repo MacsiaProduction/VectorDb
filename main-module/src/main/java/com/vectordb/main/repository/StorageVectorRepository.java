@@ -169,6 +169,7 @@ public class StorageVectorRepository implements VectorRepository {
                     break; // Найдено
                 } else {
                     log.debug("Vector {} not found on shard {} for database {}", id, shard.shardId(), dbId);
+                    continue; // Пробуем следующий шард
                 }
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
@@ -176,13 +177,10 @@ public class StorageVectorRepository implements VectorRepository {
                     log.debug("Vector {} not found on shard {} for database {} (404)", id, shard.shardId(), dbId);
                     continue;
                 }
-                log.error("Failed to get vector {} from database {} on shard {}: {}",
+                log.warn("Failed to get vector {} from database {} on shard {}: {}",
                         id, dbId, shard.shardId(), cause.getMessage());
-                /*throw new VectorRepositoryException(
-                        "Failed to get vector " + id + " from database " + dbId + " on shard " + shard.shardId(),
-                        cause
-                );*/
-                continue;
+                hadConnectivityErrors = true;
+                continue; // Пробуем следующий шард
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.error("Get operation interrupted for vector {} in database {} on shard {}", id, dbId, shard.shardId(), e);
@@ -191,16 +189,10 @@ public class StorageVectorRepository implements VectorRepository {
                         e
                 );
             } catch (Exception e) {
-                log.error("Unexpected error while getting vector {} from database {} on shard {}: {}",
+                log.warn("Error while getting vector {} from database {} on shard {}: {}",
                         id, dbId, shard.shardId(), e.getMessage());
-                throw new VectorRepositoryException(
-                        "Failed to get vector " + id + " from database " + dbId + " on shard " + shard.shardId(),
-                        e
-                );
-            }
-            // Если ничего не нашли и были проблемы с доступностью - бросаем исключение
-            if (foundEntry == null && !hadConnectivityErrors) {
-                throw new VectorRepositoryException("Failed to get vector " + id + " from database " + dbId + ": all candidate shards are unavailable");
+                hadConnectivityErrors = true;
+                continue; // Пробуем следующий шард
             }
         }
 

@@ -371,7 +371,7 @@ step3_create_database_and_data() {
         print_success "База данных создана"
     else
         print_error "Ошибка создания БД (HTTP $http_code)"
-        echo "Response: $(echo "$response" | head -n-1)"
+        echo "Response: $(echo "$response" | sed '$ d')"
         exit 1
     fi
 
@@ -392,8 +392,8 @@ step3_create_database_and_data() {
 
         if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
             added_count=$((added_count + 1))
-            # Извлекаем ID добавленного вектора
-            vector_id=$(echo "$response" | head -n-1 | jq -r '.id // empty' 2>/dev/null)
+            # Извлекаем ID добавленного вектора (API возвращает просто число, не JSON)
+            vector_id=$(echo "$response" | sed '$ d' | tr -d '[:space:]')
             if [ -n "$vector_id" ] && [ "$vector_id" != "null" ]; then
                 vector_ids+=("$vector_id")
             fi
